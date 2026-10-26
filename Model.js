@@ -197,9 +197,9 @@ function localizeDigits(text, language) {
 //   d dd       day of month        ddd dddd   weekday, short and long
 //   M MM       month number        MMM MMMM   month name, short and long
 //   yy yyyy    year
-//   H HH h hh  hour                mm     minute
+//   H HH h hh  hour                mm ss  minute, second
 //   AP         AM/PM marker
-var FORMAT_TOKENS = /'[^']*'|dddd|ddd|dd|d|MMMM|MMM|MM|M|yyyy|yy|HH|H|hh|h|mm|AP|ap/g
+var FORMAT_TOKENS = /'[^']*'|dddd|ddd|dd|d|MMMM|MMM|MM|M|yyyy|yy|HH|H|hh|h|mm|ss|AP|ap/g
 
 function formatJalali(date, format, language) {
   var lang = normalizedLanguage(language)
@@ -224,6 +224,7 @@ function formatJalali(date, format, language) {
       case "hh": return pad2(hours12)
       case "h": return String(hours12)
       case "mm": return pad2(date.getMinutes())
+      case "ss": return pad2(date.getSeconds())
       case "AP":
       case "ap": return MERIDIEM[lang][hours < 12 ? 0 : 1]
     }
@@ -256,6 +257,12 @@ var VERTICAL_CLOCK_FORMATS = [
   "d\nMM\nyy",
   "HH\nmm"
 ]
+
+// Ticking every second costs a redraw a second, so only a label that shows
+// seconds asks for it.
+function showsSeconds(format) {
+  return /ss/.test(String(format).replace(/'[^']*'/g, ""))
+}
 
 function clockFormats(vertical) {
   return vertical ? VERTICAL_CLOCK_FORMATS.slice() : CLOCK_FORMATS.slice()
@@ -548,6 +555,7 @@ if (typeof module !== "undefined") {
     weekdayShort: weekdayShort,
     localizeDigits: localizeDigits,
     formatJalali: formatJalali,
+    showsSeconds: showsSeconds,
     clockFormats: clockFormats,
     clockFormatRing: clockFormatRing,
     nextClockFormat: nextClockFormat,

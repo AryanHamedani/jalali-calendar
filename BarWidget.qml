@@ -121,7 +121,7 @@ BarWidget {
 
   SystemClock {
     id: clock
-    precision: SystemClock.Minutes
+    precision: Model.showsSeconds(root.activeFormat) ? SystemClock.Seconds : SystemClock.Minutes
     onDateChanged: root.displayDate = date
   }
 

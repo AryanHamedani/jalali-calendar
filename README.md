@@ -98,6 +98,7 @@ Formats read like Qt's, but name the Jalali date:
 | `yy` `yyyy`      | Year                      | `05` `1405` |
 | `H` `HH` `h` `hh`| Hour, 24 or 12            | `14` `2`    |
 | `mm`             | Minute                    | `30`        |
+| `ss`             | Second, ticks only if shown | `09`      |
 | `AP`             | AM / PM                   | `PM`        |
 | `'text'`         | Literal text              |             |
 
