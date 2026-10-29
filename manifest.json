@@ -5,7 +5,7 @@
   "version": "1.0.0",
   "author": "Aryan Hamedani",
   "license": "MIT",
-  "description": "The stock clock on the Persian calendar, with official holidays and occasions",
+  "description": "The Omarchy clock on the Persian (Jalali) calendar, with Iran's official holidays and occasions",
   "kinds": [
     "bar-widget"
   ],
@@ -18,5 +18,6 @@
     "category": "Time",
     "allowMultiple": false,
     "defaultSection": "center"
-  }
+  },
+  "homepage": "https://github.com/AryanHamedani/omarchy-jalali-calendar"
 }

@@ -1,5 +1,7 @@
 # Jalali Calendar for Omarchy
 
+[![test](https://github.com/AryanHamedani/omarchy-jalali-calendar/actions/workflows/test.yml/badge.svg)](https://github.com/AryanHamedani/omarchy-jalali-calendar/actions/workflows/test.yml)
+
 The Omarchy clock, on the Persian calendar.
 
 It is the stock `omarchy.clock` with the Jalali calendar underneath: the same
@@ -7,7 +9,7 @@ label, the same popup, the same clicks and keys, the same settings. On top of
 that, it knows Iran's official holidays and occasions, lunar ones included,
 straight from the official calendar.
 
-![Jalali Calendar](preview.png)
+![The calendar in English and in Persian](preview.png)
 
 - **Bar label** in Jalali: `Tuesday 5 Aban 14:30`. Right-click walks the
   formats, middle-click picks a timezone, left-click opens the calendar.
@@ -139,6 +141,14 @@ The suite converts every day from 1300 to 1500 and checks each one against
 ICU's Persian calendar, so the arithmetic is proven against an independent
 implementation, not against itself.
 
+## Update
+
+```bash
+omarchy plugin update io.github.aryanhamedani.jalali-calendar
+```
+
+New years of holiday data arrive this way, usually before Nowruz.
+
 ## Remove
 
 ```bash
@@ -146,6 +156,31 @@ omarchy plugin remove io.github.aryanhamedani.jalali-calendar --yes
 ```
 
 Put `omarchy.clock` back into `bar.layout` if you took it out.
+
+## Development
+
+```
+BarWidget.qml        the bar label; hosts the popup
+Panel.qml            the calendar popup
+Model.js             all date math and formatting, Qt-free so node can test it
+events/              holiday and occasion data, one file per Jalali year
+bin/fetch-events     rebuilds events/<year>.json from time.ir (needs curl, jq)
+test/model-test.js   node test suite
+```
+
+Clone over the installed copy and the shell reloads it on every save:
+
+```bash
+omarchy plugin remove io.github.aryanhamedani.jalali-calendar --yes
+git clone https://github.com/AryanHamedani/omarchy-jalali-calendar ~/.config/omarchy/plugins/io.github.aryanhamedani.jalali-calendar
+omarchy plugin enable io.github.aryanhamedani.jalali-calendar
+journalctl --user -f | grep jalali   # QML errors
+```
+
+Keep date logic in `Model.js` with a test beside it; keep QML to drawing.
+A new year of data is `bin/fetch-events 1407`, then English titles for any
+new names in `events/en.json` (CI fails when one is missing). Pull requests
+welcome, especially corrections to occasion names.
 
 ## License
 

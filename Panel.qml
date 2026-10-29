@@ -132,6 +132,9 @@ Panel {
   readonly property int cellSpacing: Style.space(2)
   readonly property int weekColumnWidth: Style.space(32)
   readonly property int gutterWidth: Style.space(14)
+  // Both rails start their track at the same x, whatever their labels say.
+  readonly property real railPercentWidth: Math.max(yearPercent.implicitWidth, lifePercent.implicitWidth)
+  readonly property real railLabelWidth: Math.max(yearLabel.implicitWidth, lifeLabel.implicitWidth)
 
   function open() {
     refresh()
@@ -366,9 +369,8 @@ Panel {
                 id: heroDate
                 textFormat: Text.PlainText
                 anchors.verticalCenter: parent.verticalCenter
-                text: root.rtl
-                  ? root.digits(root.todayJalali.day + " " + Model.monthName(root.todayJalali.month, root.language))
-                  : Model.monthName(root.todayJalali.month, root.language) + " " + root.todayJalali.day
+                // Day first in both languages, the way Iranian calendars print it.
+                text: root.digits(root.todayJalali.day + " " + Model.monthName(root.todayJalali.month, root.language))
                 color: heroMouse.containsMouse
                   ? Style.hoverStateColor(root.contentForeground, Commons.Color.accent)
                   : root.contentForeground
@@ -471,6 +473,7 @@ Panel {
                 id: yearLabel
                 textFormat: Text.PlainText
                 visible: !root.editingLife
+                width: root.railLabelWidth
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.digits(root.todayJalali.year)
@@ -482,6 +485,8 @@ Panel {
 
               Text {
                 id: yearPercent
+                width: root.railPercentWidth
+                horizontalAlignment: Text.AlignRight
                 textFormat: Text.PlainText
                 visible: !root.editingLife
                 anchors.right: parent.right
@@ -532,6 +537,7 @@ Panel {
 
               Text {
                 id: lifeLabel
+                width: root.railLabelWidth
                 anchors.left: parent.left
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.label("life")
@@ -543,6 +549,8 @@ Panel {
 
               Text {
                 id: lifePercent
+                width: root.railPercentWidth
+                horizontalAlignment: Text.AlignRight
                 textFormat: Text.PlainText
                 anchors.right: parent.right
                 anchors.verticalCenter: parent.verticalCenter
@@ -674,7 +682,8 @@ Panel {
                     horizontalAlignment: Text.AlignHCenter
                     verticalAlignment: Text.AlignVCenter
                     text: root.weekdayLabel(modelData)
-                    color: Qt.darker(root.contentForeground, 1.5)
+                    // Friday is the weekend: its heading is set like its days.
+                    color: modelData === 5 ? Commons.Color.urgent : Qt.darker(root.contentForeground, 1.5)
                     font.family: root.textFontFamily
                     font.pixelSize: Style.font.caption
                     font.letterSpacing: 1
@@ -746,22 +755,24 @@ Panel {
                         visible: modelData.inMonth
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
-                        anchors.rightMargin: Style.space(5)
+                        anchors.rightMargin: Style.space(4)
                         anchors.bottomMargin: Style.space(2)
                         text: modelData.gregorianDay
-                        color: Qt.darker(root.contentForeground, 2.2)
+                        color: Qt.darker(root.contentForeground, 1.8)
                         font.family: root.contentFontFamily
-                        font.pixelSize: Style.font.caption * 0.8
+                        font.pixelSize: Math.round(Style.font.caption * 0.9)
                       }
 
-                      // A dot under any day with an occasion, so the month
-                      // shows where to look before pointing at anything.
+                      // A dot in the top corner of any day with an occasion,
+                      // so the month shows where to look before pointing at
+                      // anything, clear of the Gregorian day below it.
                       Rectangle {
                         visible: modelData.inMonth && modelData.occasions.length > 0
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        anchors.bottom: parent.bottom
-                        anchors.bottomMargin: Style.space(4)
-                        width: Style.space(3)
+                        anchors.right: parent.right
+                        anchors.top: parent.top
+                        anchors.rightMargin: Style.space(6)
+                        anchors.topMargin: Style.space(6)
+                        width: Style.space(4)
                         height: width
                         radius: width / 2
                         color: dayCell.dayColor
@@ -787,7 +798,10 @@ Panel {
             // Hairline down the week-number gutter, drawn only beside the
             // day rows so it does not cut through the header band.
             Rectangle {
-              x: gridColumn.x + root.weekColumnWidth + root.cellSpacing + Math.round((root.gutterWidth - width) / 2)
+              // Plain x is not mirrored by LayoutMirroring, so right to left
+              // the line is placed from the grid's other edge.
+              readonly property real offset: root.weekColumnWidth + root.cellSpacing + Math.round((root.gutterWidth - width) / 2)
+              x: root.rtl ? gridColumn.x + gridColumn.width - offset - width : gridColumn.x + offset
               y: gridColumn.y + headerRow.height + gridColumn.spacing
               width: Style.spacing.hairline
               height: gridColumn.height - headerRow.height - gridColumn.spacing
