@@ -43,7 +43,7 @@ fi
 omarchy plugin enable "$ID" >/dev/null 2>&1 || true
 
 # Persian mode needs a face with the script; the bar's monospace has none.
-if ! fc-list | grep -qi vazirmatn; then
+if ! fc-list : family | grep -i vazirmatn >/dev/null; then
   step "Installing the Vazirmatn font, for Persian mode"
   omarchy pkg aur add vazirmatn-fonts || note "Could not install vazirmatn-fonts; set fontFamily to any Persian font instead"
 fi
