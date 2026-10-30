@@ -2,19 +2,19 @@
   "schemaVersion": 1,
   "id": "io.github.aryanhamedani.jalali-calendar",
   "name": "Jalali Calendar",
-  "version": "1.2.0",
+  "version": "2.0.0",
   "author": "Aryan Hamedani",
   "license": "MIT",
-  "description": "The Omarchy clock on the Persian (Jalali) calendar, with Iran's official holidays and occasions",
+  "description": "The Persian (Jalali) calendar in the bar, with Iran's official holidays and occasions",
   "kinds": [
     "bar-widget"
   ],
   "entryPoints": {
-    "barWidget": "BarWidget.qml"
+    "barWidget": "omarchy/BarWidget.qml"
   },
   "barWidget": {
     "displayName": "Jalali Calendar",
-    "description": "Jalali date/time label with a calendar of Iranian holidays and occasions",
+    "description": "Jalali date label with a calendar of Iranian holidays and occasions",
     "category": "Time",
     "allowMultiple": false,
     "defaultSection": "center"

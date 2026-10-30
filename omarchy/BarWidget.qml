@@ -3,7 +3,7 @@ import Quickshell
 import Quickshell.Io
 import qs.Commons
 import qs.Ui
-import "Model.js" as Model
+import "../lib/Model.js" as Model
 
 // Jalali date/time label for the bar, and the host for the calendar popup.
 // A drop-in for the stock clock: same clicks, same formats ring, same IPC,

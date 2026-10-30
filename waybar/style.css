@@ -1,0 +1,9 @@
+/* Jalali Calendar for Waybar. @import this from your Waybar style.css. */
+#custom-jalali {
+  padding: 0 10px;
+}
+
+/* Fridays and official holidays. */
+#custom-jalali.holiday {
+  color: #f7768e;
+}

@@ -4,7 +4,7 @@ import Quickshell.Io
 import qs.Commons
 import qs.Commons as Commons
 import qs.Ui
-import "Model.js" as Model
+import "../lib/Model.js" as Model
 
 // The Jalali calendar popup: the stock clock's month grid, read off the
 // Persian calendar — same hero-over-detail composition, same spacing scale,
@@ -81,7 +81,7 @@ Panel {
   //      the official list (lunar occasions and the holiday roster) ships one
   //      file per year, loaded for the year on screen and both neighbors so
   //      the grid's spill-over days are right at Nowruz too.
-  readonly property string eventsDir: decodeURIComponent(Qt.resolvedUrl("events").toString().replace(/^file:\/\//, ""))
+  readonly property string eventsDir: decodeURIComponent(Qt.resolvedUrl("../events").toString().replace(/^file:\/\//, ""))
   readonly property var events: ({
     national: Model.parseEvents(nationalFile.loadedText),
     international: Model.parseEvents(internationalFile.loadedText),

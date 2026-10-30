@@ -1,5 +1,23 @@
 # Changelog
 
+## 2.0.0 (2026-10-30)
+
+Jalali Calendar is no longer tied to one desktop.
+
+- **Waybar front end** for Hyprland, Sway, niri, river and other wlroots
+  compositors: your date label, and a tooltip with the month, Fridays and
+  holidays in red, today marked, and today's occasions; scroll through
+  months, click to come back.
+- **A terminal command**, `jalali-calendar`: `today`, `date FORMAT`,
+  `convert`, and a `cal`-style `month`.
+- **A Python core**, `lib/jalali.py`, checked against the JavaScript one
+  (`lib/Model.js`) for every day from 1300 to 1500, formatted dates in both
+  languages, and every month grid with its holidays.
+- The Omarchy widget moved to `omarchy/`; `install.sh` picks the front end
+  for your desktop (`--waybar` to choose) and works on any distribution.
+
+Upgrading on Omarchy needs nothing: `install.sh` or `git pull` as before.
+
 ## 1.2.0 (2026-10-30)
 
 - The repository is now `AryanHamedani/jalali-calendar` (the old address

@@ -8,8 +8,17 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
-      - name: Conversion and model tests (cross-checked against ICU)
-        run: node test/model-test.js
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: JavaScript core, cross-checked against ICU
+        run: node tests/model-test.js
+      - name: Python core and command, cross-checked against the JavaScript core
+        run: python3 -m unittest discover -s tests -v
+      - name: Shell scripts
+        run: shellcheck install.sh bin/fetch-events
+      - name: Waybar module is valid JSON once comments are stripped
+        run: sed 's#^\s*//.*##' waybar/module.jsonc | jq -e '."custom/jalali".exec'
       - name: Event data is valid JSON
         run: for f in events/*.json; do jq -e . "$f" >/dev/null || exit 1; done
       - name: Every Persian title has an English one
@@ -19,5 +28,5 @@ jobs:
             | ([$nat, $intl][] | .[][] | .title), ([$y1, $y2, $y3][] | .[] | .events[])
             | select($en[0][.] == null)' events/national.json events/international.json events/14*.json)
           [ -z "$missing" ] || { echo "$missing"; exit 1; }
-      - name: Manifest
-        run: jq -e '.schemaVersion == 1 and .entryPoints.barWidget == "BarWidget.qml"' manifest.json
+      - name: Omarchy manifest points at a file that exists
+        run: test -f "$(jq -r .entryPoints.barWidget manifest.json)"

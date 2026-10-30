@@ -1,0 +1,22 @@
+// Jalali Calendar for Waybar. Include this file from your Waybar config and
+// put "custom/jalali" where your clock goes:
+//
+//   "include": ["~/.config/waybar/jalali-calendar.jsonc"],
+//   "modules-center": ["custom/jalali"],
+//
+// Hover for the month; scroll to step through months, click to come back to
+// today. Options are on the exec line: --language fa, --week-start monday,
+// --format "yyyy/MM/dd HH:mm" (add "interval": 1 if the format shows seconds).
+{
+  "custom/jalali": {
+    "exec": "jalali-calendar waybar --format 'dddd d MMMM HH:mm'",
+    "return-type": "json",
+    "interval": 10,
+    "signal": 9,
+    "exec-on-event": false,
+    "tooltip": true,
+    "on-click": "jalali-calendar shift 0",
+    "on-scroll-up": "jalali-calendar shift -1",
+    "on-scroll-down": "jalali-calendar shift +1"
+  }
+}

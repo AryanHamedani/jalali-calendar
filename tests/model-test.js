@@ -7,7 +7,7 @@
 const assert = require("assert")
 const path = require("path")
 const fs = require("fs")
-const Model = require("../Model.js")
+const Model = require("../lib/Model.js")
 
 const root = path.join(__dirname, "..")
 const events = {
