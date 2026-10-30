@@ -1,6 +1,6 @@
-# Jalali Calendar for Omarchy
+# Jalali Calendar
 
-[![test](https://github.com/AryanHamedani/omarchy-jalali-calendar/actions/workflows/test.yml/badge.svg)](https://github.com/AryanHamedani/omarchy-jalali-calendar/actions/workflows/test.yml)
+[![test](https://github.com/AryanHamedani/jalali-calendar/actions/workflows/test.yml/badge.svg)](https://github.com/AryanHamedani/jalali-calendar/actions/workflows/test.yml)
 
 The Omarchy clock, on the Persian calendar.
 
@@ -30,7 +30,7 @@ Everything ships with the plugin. No network, no services, no dependencies.
 ## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/AryanHamedani/omarchy-jalali-calendar/main/install.sh | bash -s -- --replace-clock
+curl -fsSL https://raw.githubusercontent.com/AryanHamedani/jalali-calendar/main/install.sh | bash -s -- --replace-clock
 ```
 
 This adds the plugin, installs the Vazirmatn font for Persian mode, and takes
@@ -39,7 +39,7 @@ anchor if the clock held it (`shell.json` is backed up first). Leave out
 `--replace-clock` to keep the stock clock and add this beside it. Run the same
 command again to update.
 
-By hand: `omarchy plugin add https://github.com/AryanHamedani/omarchy-jalali-calendar --enable`.
+By hand: `omarchy plugin add https://github.com/AryanHamedani/jalali-calendar --enable`.
 
 **It needs Omarchy 4.** The widget extends the Omarchy shell's own clock and
 UI components, so it is not a standalone Hyprland widget. `Model.js`, the
@@ -176,7 +176,7 @@ Clone over the installed copy and the shell reloads it on every save:
 
 ```bash
 omarchy plugin remove io.github.aryanhamedani.jalali-calendar --yes
-git clone https://github.com/AryanHamedani/omarchy-jalali-calendar ~/.config/omarchy/plugins/io.github.aryanhamedani.jalali-calendar
+git clone https://github.com/AryanHamedani/jalali-calendar ~/.config/omarchy/plugins/io.github.aryanhamedani.jalali-calendar
 omarchy plugin enable io.github.aryanhamedani.jalali-calendar
 journalctl --user -f | grep jalali   # QML errors
 ```

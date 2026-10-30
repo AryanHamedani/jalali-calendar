@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-10-30)
+
+- The repository is now `AryanHamedani/jalali-calendar` (the old address
+  redirects).
+
 ## 1.1.1 (2026-10-30)
 
 - Fixed: a dependency check piped into `grep -q` could misfire under

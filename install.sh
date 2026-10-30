@@ -2,7 +2,7 @@
 
 # Install or update the Jalali calendar for the Omarchy bar.
 #
-#   curl -fsSL https://raw.githubusercontent.com/AryanHamedani/omarchy-jalali-calendar/main/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/AryanHamedani/jalali-calendar/main/install.sh | bash
 #   ... | bash -s -- --replace-clock    # also take the stock clock's place
 #
 # Safe to run again: it updates the plugin and fixes whatever is missing.
@@ -10,7 +10,7 @@
 set -euo pipefail
 
 ID=io.github.aryanhamedani.jalali-calendar
-REPO=https://github.com/AryanHamedani/omarchy-jalali-calendar
+REPO=https://github.com/AryanHamedani/jalali-calendar
 DIR="$HOME/.config/omarchy/plugins/$ID"
 SHELL_JSON="$HOME/.config/omarchy/shell.json"
 replace_clock=0

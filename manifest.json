@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.aryanhamedani.jalali-calendar",
   "name": "Jalali Calendar",
-  "version": "1.1.1",
+  "version": "1.2.0",
   "author": "Aryan Hamedani",
   "license": "MIT",
   "description": "The Omarchy clock on the Persian (Jalali) calendar, with Iran's official holidays and occasions",
@@ -19,5 +19,5 @@
     "allowMultiple": false,
     "defaultSection": "center"
   },
-  "homepage": "https://github.com/AryanHamedani/omarchy-jalali-calendar"
+  "homepage": "https://github.com/AryanHamedani/jalali-calendar"
 }
