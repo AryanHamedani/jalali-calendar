@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "io.github.aryanhamedani.jalali-calendar",
   "name": "Jalali Calendar",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "author": "Aryan Hamedani",
   "license": "MIT",
   "description": "The Persian (Jalali) calendar in the bar, with Iran's official holidays and occasions",

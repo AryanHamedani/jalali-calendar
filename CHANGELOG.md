@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.0.1 (2026-10-30)
+
+- Security: the month-scroll state no longer falls back to a world-writable
+  `/tmp` when `XDG_RUNTIME_DIR` is unset, where another user could plant a
+  symlink; it uses a private (0700) folder in `~/.cache` instead.
+
 ## 2.0.0 (2026-10-30)
 
 Jalali Calendar is no longer tied to one desktop.

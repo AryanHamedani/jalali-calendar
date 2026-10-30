@@ -34,7 +34,20 @@ def esc(text):
 
 EVENTS = ROOT / 'events'
 RLM, LRE, PDF = '\u200f', '\u202a', '\u202c'
-OFFSET = Path(os.environ.get('XDG_RUNTIME_DIR', '/tmp')) / ('jalali-calendar-%d.offset' % os.getuid())
+
+
+def private_dir():
+    """XDG_RUNTIME_DIR, or a 0700 folder in ~/.cache: never a world-writable /tmp,
+    where another user could plant a symlink for us to write through."""
+    runtime = os.environ.get('XDG_RUNTIME_DIR')
+    if runtime and os.path.isdir(runtime):
+        return Path(runtime)
+    path = Path(os.environ.get('XDG_CACHE_HOME', Path.home() / '.cache')) / 'jalali-calendar'
+    path.mkdir(mode=0o700, parents=True, exist_ok=True)
+    return path
+
+
+OFFSET = private_dir() / 'jalali-calendar.offset'
 # A month stepped to by scrolling snaps back to today once the pointer has
 # been gone this long, the way a calendar popup resets when it closes.
 OFFSET_TTL = 120
