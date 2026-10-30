@@ -30,19 +30,20 @@ Everything ships with the plugin. No network, no services, no dependencies.
 ## Install
 
 ```bash
-omarchy plugin add https://github.com/AryanHamedani/omarchy-jalali-calendar --enable
+curl -fsSL https://raw.githubusercontent.com/AryanHamedani/omarchy-jalali-calendar/main/install.sh | bash -s -- --replace-clock
 ```
 
-To take the stock clock's place, put it where the clock was and remove the
-clock from the bar:
+This adds the plugin, installs the Vazirmatn font for Persian mode, and takes
+the stock clock's place in the bar: same slot, same settings, and the center
+anchor if the clock held it (`shell.json` is backed up first). Leave out
+`--replace-clock` to keep the stock clock and add this beside it. Run the same
+command again to update.
 
-```bash
-omarchy bar move io.github.aryanhamedani.jalali-calendar --section center --after omarchy.clock
-```
+By hand: `omarchy plugin add https://github.com/AryanHamedani/omarchy-jalali-calendar --enable`.
 
-Then delete the `omarchy.clock` entry from `bar.layout` in
-`~/.config/omarchy/shell.json`, and point `bar.centerAnchor` at
-`io.github.aryanhamedani.jalali-calendar` if it named the clock.
+**It needs Omarchy 4.** The widget extends the Omarchy shell's own clock and
+UI components, so it is not a standalone Hyprland widget. `Model.js`, the
+calendar and formatting logic, has no dependencies and can be reused anywhere.
 
 ## Use
 
@@ -147,6 +148,8 @@ implementation, not against itself.
 omarchy plugin update io.github.aryanhamedani.jalali-calendar
 ```
 
+or run the install command again.
+
 New years of holiday data arrive this way, usually before Nowruz.
 
 ## Remove
@@ -164,6 +167,7 @@ BarWidget.qml        the bar label; hosts the popup
 Panel.qml            the calendar popup
 Model.js             all date math and formatting, Qt-free so node can test it
 events/              holiday and occasion data, one file per Jalali year
+install.sh           one-command install / update
 bin/fetch-events     rebuilds events/<year>.json from time.ir (needs curl, jq)
 test/model-test.js   node test suite
 ```

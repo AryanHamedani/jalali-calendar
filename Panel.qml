@@ -323,7 +323,10 @@ Panel {
         anchors.fill: parent
         contentWidth: calendarColumn.width
         contentHeight: calendarColumn.implicitHeight
-        clip: true
+        // Clipping only when it scrolls: at fractional display scales Qt's
+        // clip shaves the first pixel column, and with it the left border of
+        // a today cell on the grid's edge.
+        clip: interactive
         boundsBehavior: Flickable.StopAtBounds
         interactive: contentHeight > height || contentWidth > width
 

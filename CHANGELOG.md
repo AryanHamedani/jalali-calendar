@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.1.0 (2026-10-30)
+
+- One-command install and update (`install.sh`), with the Vazirmatn font for
+  Persian mode and an optional `--replace-clock` that takes the stock clock's
+  slot, settings and center anchor.
+- The popup clips only when it has to scroll: at fractional display scales
+  Qt's clip shaved the left border off cells on the grid's edge.
+
 ## 1.0.0 (2026-10-30)
 
 First public release.
