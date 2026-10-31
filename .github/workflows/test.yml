@@ -1,7 +1,5 @@
 name: test
-# workflow_dispatch: the events sync starts it on its pull request, which a
-# GITHUB_TOKEN push alone would not.
-on: [push, pull_request, workflow_dispatch]
+on: [push, pull_request]
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -23,12 +21,5 @@ jobs:
         run: sed 's#^\s*//.*##' waybar/module.jsonc | jq -e '."custom/jalali".exec'
       - name: Event data is valid JSON
         run: for f in events/*.json; do jq -e . "$f" >/dev/null || exit 1; done
-      - name: Every Persian title has an English one
-        run: |
-          missing=$(jq -rn --slurpfile en events/en.json '
-            [inputs] as $files
-            | ($files[:2][] | .[][] | .title), ($files[2:][] | .[] | .events[])
-            | select($en[0][.] == null)' events/national.json events/international.json events/14*.json)
-          [ -z "$missing" ] || { echo "$missing"; exit 1; }
       - name: Omarchy manifest points at a file that exists
         run: test -f "$(jq -r .entryPoints.barWidget manifest.json)"

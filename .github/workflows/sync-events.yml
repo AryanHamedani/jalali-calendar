@@ -10,7 +10,6 @@ on:
 permissions:
   contents: write
   pull-requests: write
-  actions: write
 concurrency: sync-events
 jobs:
   sync:
@@ -38,7 +37,13 @@ jobs:
                 | "- \($k): \($old[$k] | if . then "`\(tojson)`" else "none" end) → \($n[$k] | if . then "`\(tojson)`" else "none" end)"'
               echo
             done
-            echo "New occasion names need an English title in events/en.json; the test run below says if any are missing."
+            # A pull request opened with GITHUB_TOKEN gets no test run of its own.
+            if python3 -m unittest discover -s tests >test.log 2>&1; then
+              echo "Tests pass with the new data."
+            else
+              echo "**Tests fail with the new data.** New occasion names need an English title in events/en.json:"
+              echo; echo '```'; tail -n 30 test.log; echo '```'
+            fi
           } > body.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -50,4 +55,3 @@ jobs:
           else
             gh pr create --head events-sync --title "Sync holidays and occasions with time.ir" --body-file body.md
           fi
-          gh workflow run test.yml --ref events-sync

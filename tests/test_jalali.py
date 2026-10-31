@@ -83,6 +83,15 @@ class Basics(unittest.TestCase):
         self.assertEqual(jalali.step_month(1405, 11, 1), (1406, 0))
         self.assertEqual(jalali.step_month(1405, 0, -1), (1404, 11))
 
+    def test_every_title_has_english(self):
+        events = ROOT / 'events'
+        english = json.loads((events / 'en.json').read_text())
+        titles = [item['title'] for name in ('national.json', 'international.json')
+                  for items in json.loads((events / name).read_text()).values() for item in items]
+        titles += [title for path in events.glob('1[0-9][0-9][0-9].json')
+                   for day in json.loads(path.read_text()).values() for title in day['events']]
+        self.assertEqual([t for t in titles if t not in english], [], 'add these to events/en.json')
+
 
 def load_cli():
     import importlib.machinery
