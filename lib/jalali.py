@@ -203,9 +203,18 @@ def shows_seconds(fmt):
     return 'ss' in re.sub(r"'[^']*'", '', str(fmt))
 
 
-# ---- Occasions: solar national ones, Gregorian international ones, and
-#      time.ir's official list per year (lunar occasions, holiday roster).
-def load_events(directory, years=(), english=True):
+# ---- Occasions, each keyed by the calendar its dates live in (see Model.js):
+#      solar national ones, Gregorian international ones, lunar ones placed by
+#      the Hijri months as Iran kept them, one-off dates, and "on this day".
+HIJRI_MONTHS = {
+    'fa': ['محرم', 'صفر', 'ربیع‌الاول', 'ربیع‌الثانی', 'جمادی‌الاول', 'جمادی‌الثانی',
+           'رجب', 'شعبان', 'رمضان', 'شوال', 'ذی‌القعده', 'ذی‌الحجه'],
+    'en': ['Muharram', 'Safar', 'Rabi al-Awwal', 'Rabi al-Thani', 'Jumada al-Awwal', 'Jumada al-Thani',
+           'Rajab', 'Shaban', 'Ramadan', 'Shawwal', 'Dhu al-Qadah', 'Dhu al-Hijjah'],
+}
+
+
+def load_events(directory, english=True):
     directory = Path(directory)
 
     def read(name):
@@ -213,36 +222,90 @@ def load_events(directory, years=(), english=True):
             return json.loads((directory / name).read_text())
         except (OSError, ValueError):
             return {}
-    events = {'national': read('national.json'), 'international': read('international.json'),
-              'years': {}, 'titles': read('en.json') if english else None}
-    for year in years:
-        data = read('%d.json' % year)
-        if data:
-            events['years'][str(year)] = data
-    return events
+    return {'national': read('national.json'), 'international': read('international.json'),
+            'hijri': read('hijri.json'), 'hijriMonths': hijri_month_table(read('hijri-months.json')),
+            'once': read('once.json'), 'history': read('history.json'),
+            'titles': read('en.json') if english else None}
 
 
-def occasions(events, j, g):
-    """(holiday, titles) for Jalali j and Gregorian g, both (y, m0, d)."""
+def hijri_month_table(table):
+    """{"1448-05": "2026-10-23"} -> [{jdn, year, month}] in date order, month 0-based."""
+    rows = []
+    for name, start in (table or {}).items():
+        h = re.fullmatch(r'(\d+)-(\d\d)', name)
+        g = re.fullmatch(r'(\d{4})-(\d\d)-(\d\d)', str(start))
+        if h and g:
+            rows.append({'jdn': g2d(*map(int, g.groups())), 'year': int(h.group(1)), 'month': int(h.group(2)) - 1})
+    return sorted(rows, key=lambda r: r['jdn'])
+
+
+def hijri_date(months, jdn):
+    """The Hijri date Iran kept for a day, or None outside the table. A month's
+    length is known once the next one's start is; until then, 29 days."""
+    rows = months or []
+    for i in range(len(rows) - 1, -1, -1):
+        if rows[i]['jdn'] > jdn:
+            continue
+        nxt = rows[i + 1] if i + 1 < len(rows) else None
+        length = nxt['jdn'] - rows[i]['jdn'] if nxt and (nxt['month'] - rows[i]['month']) % 12 == 1 else 0
+        day = jdn - rows[i]['jdn'] + 1
+        if day > (length or 29):
+            return None
+        return {'year': rows[i]['year'], 'month': rows[i]['month'], 'day': day, 'length': length}
+    return None
+
+
+def occasions(events, j, g, h=None):
+    """(holiday, titles) for Jalali j and Gregorian g, both (y, m0, d), and Hijri h."""
     titles, holiday = [], False
     for item in (events.get('national') or {}).get(pad2(j[1] + 1), []):
         if item.get('day') == j[2]:
             titles.append(item['title'])
             holiday = holiday or item.get('holiday') is True
-    year = (events.get('years') or {}).get(str(j[0]))
-    if year:
-        official = year.get(pad2(j[1] + 1) + '-' + pad2(j[2]))
-        holiday = bool(official and official.get('holiday'))
-        if official:
-            titles += official.get('events', [])
-    gregorian = '%s %d' % (GREGORIAN_MONTHS[g[1]], g[2])
-    for item in (events.get('international') or {}).get(pad2(j[1] + 1), []):
-        if item.get('date') == gregorian:
+    if h:
+        hijri = events.get('hijri') or {}
+        lunar = list(hijri.get('%s-%s' % (pad2(h['month'] + 1), pad2(h['day'])), []))
+        if h['day'] == 29 and h['length'] == 29:  # "the 30th" is the last day
+            lunar += [e for e in hijri.get(pad2(h['month'] + 1) + '-30', []) if e.get('last')]
+        for item in lunar:
             titles.append(item['title'])
+            holiday = holiday or item.get('holiday') is True
+    once = (events.get('once') or {}).get('%d-%s-%s' % (j[0], pad2(j[1] + 1), pad2(j[2])))
+    if once:
+        titles += once.get('events', [])
+        if isinstance(once.get('holiday'), bool):
+            holiday = once['holiday']
+    titles += (events.get('international') or {}).get('%s-%s' % (pad2(g[1] + 1), pad2(g[2])), [])
     english = events.get('titles')
     if english:
         titles = [english.get(t, t) for t in titles]
     return holiday, titles
+
+
+def on_this_day(events, j, g, language='en'):
+    """[(year, title)], most recent first; the year in the reader's calendar."""
+    language = lang(language)
+    history = events.get('history') or {}
+    english = (events.get('titles') or {}) if language == 'en' else None
+    out = []
+
+    def add(items, year_in):
+        for year, title in items or []:
+            if english is not None and title not in english:
+                continue
+            out.append((None if year is None else year_in(year), english[title] if english is not None else title))
+    add(history.get('gregorian', {}).get('%s-%s' % (pad2(g[1] + 1), pad2(g[2]))),
+        lambda y: y if language == 'en' else jdn_to_jalali(g2d(y, g[1] + 1, g[2]))[0])
+    add(history.get('jalali', {}).get('%s-%s' % (pad2(j[1] + 1), pad2(j[2]))),
+        lambda y: y if language == 'fa' else d2g(jalali_to_jdn(y, j[1], min(j[2], month_length(y, j[1]))))[0])
+    return sorted(out, key=lambda e: -1e9 if e[0] is None else e[0], reverse=True)
+
+
+def hijri_title(h, language):
+    if not h:
+        return ''
+    language = lang(language)
+    return localize_digits('%d %s %d' % (h['day'], HIJRI_MONTHS[language][h['month']], h['year']), language)
 
 
 # ---- Weeks and the month grid.
@@ -269,9 +332,10 @@ def day_cell(jdn, events, today_jdn=None):
     j = jdn_to_jalali(jdn)
     g = d2g(jdn)
     weekday = weekday_of_jdn(jdn)
-    holiday, titles = occasions(events, j, g)
+    h = hijri_date(events.get('hijriMonths'), jdn)
+    holiday, titles = occasions(events, j, g, h)
     return {'jdn': jdn, 'year': j[0], 'month': j[1], 'day': j[2],
-            'gregorian': g, 'weekday': weekday, 'weekend': weekday == 5,
+            'gregorian': g, 'hijri': h, 'weekday': weekday, 'weekend': weekday == 5,
             'holiday': weekday == 5 or holiday, 'occasions': titles, 'today': jdn == today_jdn}
 
 

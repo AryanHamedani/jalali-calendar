@@ -16,7 +16,10 @@ away.
 - **A month grid** starting on Saturday, with week numbers, Fridays and
   official holidays in red, and today marked.
 - **Occasions for every day**: national (Nowruz, Yalda, Mehregan…), religious
-  (Eid al-Fitr, Ashura…) and international, from time.ir's official calendar.
+  (Eid al-Fitr, Ashura…) and international, matching time.ir's official
+  calendar holiday for holiday.
+- **All three calendars**: each day shows its Gregorian and Hijri dates too.
+- **On this day**: births, deaths and events from history, about 700 of them.
 - **No network, no services.** Everything ships with it.
 
 ## Where it runs
@@ -70,6 +73,12 @@ $ jalali-calendar month          # or: month 1405 1
 32   2   3   4   5   6   7   8
 …
   8  National Rangers' Day
+$ jalali-calendar on-this-day     # or: on-this-day 1405-08-09
+Saturday 9 Aban 1405  31 October 2026 · 20 Jumada al-Awwal 1448
+
+On this day
+  1984  Assassination of Indira Gandhi, Prime Minister of India
+  1795  Birth of John Keats, English poet
 ```
 
 | Waybar | Omarchy | Does |
@@ -95,6 +104,7 @@ $ jalali-calendar month          # or: month 1405 1
 | `--week-start` | `saturday` | First column of the grid |
 | `--holiday-color` | `#f7768e` | Fridays and holidays in the tooltip |
 | `--today-color` | `#7aa2f7` | Today's highlight in the tooltip |
+| `--on-this-day` | `3` | "On this day" lines in the tooltip; `0` hides them |
 
 The label's CSS gets the class `holiday` on Fridays and official holidays.
 Scrolling redraws the module through Waybar signal 9; if another module
@@ -113,6 +123,7 @@ already uses it, change `"signal"` in the module and set
 | `weekStartDay` | `saturday` | First column of the grid |
 | `birthYear` | | Jalali year, for the memento mori rail (double-click the year bar) |
 | `lifeExpectancy` | `90` | Years that rail measures against |
+| `onThisDay` | `2` | "On this day" lines under the occasions; `0` hides them |
 
 **Formats** read like Qt's date formats, but name the Jalali date:
 
@@ -130,27 +141,47 @@ already uses it, change `"signal"` in the module and set
 
 ## Holidays and occasions
 
-Solar dates never move, but lunar ones are fixed each year by moon sighting,
-so no formula reproduces the official calendar, and this one does not guess.
-It ships time.ir's official list for each year; a year without its file still
-shows every solar occasion and holiday and leaves the lunar ones out.
+Every occasion repeats on a date in its own calendar, so the lists ship once
+and hold for every year:
 
-The bundled years are 1404, 1405 and 1406. Every week a GitHub Action fetches
-this year and the next from time.ir again, so a holiday moved by moon sighting,
-the newly approved calendar and each new year reach you when you rerun the
-installer. To add a year yourself (needs `curl` and `jq`):
+| List | Keyed by | Holds |
+|---|---|---|
+| `events/national.json` | Jalali month and day | Nowruz, Yalda, Mehregan, national days, solar holidays |
+| `events/international.json` | Gregorian month and day | World Poetry Day, Christmas, … |
+| `events/hijri.json` | Hijri month and day | Ashura, Eid al-Fitr, Eid al-Adha, … with their holidays |
+| `events/history.json` | Gregorian or Jalali date | "On this day", with the year |
+| `events/once.json` | a full Jalali date | Anything that happens once, such as a holiday declared for one year |
+
+Jalali and Gregorian dates are exact for any year, leap years included (30
+Esfand only exists in a leap year, 29 February likewise). Lunar months are
+different: Iran starts each one when the new moon is sighted, so no formula
+gives the dates it keeps, and this calendar doesn't guess them.
+`events/hijri-months.json` records the day each Hijri month began, taken from
+time.ir: from Jumada al-Thani 1437 (Esfand 1394) to time.ir's latest published
+month. Outside that range a day shows its solar and Gregorian occasions only.
+
+Checked against time.ir for 1395 to 1406 (4,383 days), the holidays match
+exactly (`tests/test_jalali.py`).
+
+**Keeping in step.** Every week a GitHub Action runs `bin/fetch-events` for
+this Jalali year and the next. It records any Hijri month time.ir has moved or
+added, puts a holiday that's declared once into `once.json`, and lists
+anything time.ir has that the lists don't. The changes arrive as a pull
+request; rerunning the installer picks them up once they're merged. To run it
+yourself (needs Python 3):
 
 ```bash
-bin/fetch-events 1407
+bin/fetch-events 1405 1406
 ```
 
 The data comes from:
 
-- **time.ir**, by way of [holidayapi.ir](https://holidayapi.ir): the official
-  holiday roster and the lunar occasions (`events/<year>.json`).
+- **time.ir**, by way of [holidayapi.ir](https://holidayapi.ir): the Hijri
+  months, lunar occasions, holidays and "on this day".
 - **[Iran-calendar-events](https://github.com/5adra/Iran-calendar-events)**
   (MIT): national and international occasions (`events/national.json`,
-  `events/international.json`); its license is in `events/LICENSE.5adra`.
+  `events/international.json`), with additions from time.ir; its license is
+  in `events/LICENSE.5adra`.
 - English titles for all of them: `events/en.json`.
 
 ## Uninstall
@@ -167,8 +198,8 @@ rm -rf ~/.local/share/jalali-calendar ~/.local/bin/jalali-calendar ~/.config/way
 lib/jalali.py        the calendar core in Python: conversion, formats, occasions, grids
 lib/Model.js         the same core in JavaScript, for the Omarchy widget
 bin/jalali-calendar  the command: terminal output and the Waybar module
-bin/fetch-events     rebuilds events/<year>.json from time.ir
-events/              holiday and occasion data, one file per Jalali year
+bin/fetch-events     brings the Hijri months and one-off dates in step with time.ir
+events/              occasion lists, the Hijri month table and "on this day"
 waybar/              Waybar module and style
 omarchy/             Omarchy shell widget (QML); manifest.json is its entry
 tests/               test_jalali.py (Python), model-test.js (JavaScript)
@@ -177,8 +208,8 @@ install.sh           one-command install / update
 
 The two cores are kept identical by test: `tests/test_jalali.py` runs
 `Model.js` under node and compares every day from 1300 to 1500, formatted
-dates in both languages, and every month grid with its holidays for the
-bundled years. `tests/model-test.js` also checks the conversion against ICU's
+dates in both languages, every month grid with its holidays and Hijri dates
+from 1394 to 1408, and "on this day" for a whole year. `tests/model-test.js` also checks the conversion against ICU's
 Persian calendar, an independent implementation.
 
 ```bash

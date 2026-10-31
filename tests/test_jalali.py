@@ -20,8 +20,9 @@ const Model = require(process.argv[1] + "/lib/Model.js")
 const fs = require("fs")
 const read = n => JSON.parse(fs.readFileSync(process.argv[1] + "/events/" + n))
 const events = { national: read("national.json"), international: read("international.json"),
-  titles: read("en.json"), years: { 1404: read("1404.json"), 1405: read("1405.json"), 1406: read("1406.json") } }
-const out = { days: [], formats: [], grids: [] }
+  hijri: read("hijri.json"), hijriMonths: Model.hijriMonthTable(read("hijri-months.json")),
+  once: read("once.json"), history: read("history.json"), titles: read("en.json") }
+const out = { days: [], formats: [], grids: [], history: [] }
 for (let jy = 1300; jy <= 1500; jy++)
   for (let jm = 0; jm < 12; jm++)
     for (let jd = 1; jd <= Model.monthLength(jy, jm); jd++) {
@@ -34,9 +35,15 @@ for (let i = 0; i < 400; i++) {
   for (const f of fmts) for (const l of ["en", "fa"])
     out.formats.push([d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), f, l, Model.formatJalali(d, f, l)])
 }
-for (const jy of [1404, 1405, 1406]) for (let jm = 0; jm < 12; jm++) for (const ws of [6, 1])
+// Every month the Hijri table reaches, and a little past both of its ends.
+for (let jy = 1394; jy <= 1408; jy++) for (let jm = 0; jm < 12; jm++) for (const ws of [6, 1])
   out.grids.push([jy, jm, ws, Model.monthGrid(jy, jm, ws, "", events).map(w =>
-    [w.week, w.days.map(c => [c.year, c.month, c.day, c.inMonth, c.holiday, c.occasions])])])
+    [w.week, w.days.map(c => [c.year, c.month, c.day, c.inMonth, c.holiday, c.occasions,
+                              c.hijri && [c.hijri.year, c.hijri.month, c.hijri.day, c.hijri.length]])])])
+for (let jdn = 2460000; jdn < 2460366; jdn++) {
+  const c = Model.dayForDate(new Date(2023, 1, 24 + jdn - 2460000), events)
+  for (const l of ["en", "fa"]) out.history.push([c.j, c.g, l, Model.onThisDay(events, c.j, c.g, l).map(e => [e.year, e.title])])
+}
 process.stdout.write(JSON.stringify(out))
 '''
 
@@ -47,7 +54,7 @@ class MatchesModelJs(unittest.TestCase):
     def setUpClass(cls):
         cls.js = json.loads(subprocess.run(['node', '-e', JS, str(ROOT)], capture_output=True,
                                            text=True, check=True).stdout)
-        cls.events = jalali.load_events(ROOT / 'events', years=(1404, 1405, 1406))
+        cls.events = jalali.load_events(ROOT / 'events')
 
     def test_every_day_1300_to_1500(self):
         self.assertGreater(len(self.js['days']), 73000)
@@ -63,8 +70,15 @@ class MatchesModelJs(unittest.TestCase):
     def test_month_grids_and_occasions(self):
         for jy, jm, ws, weeks in self.js['grids']:
             ours = jalali.month_grid(jy, jm, ws, self.events)
-            self.assertEqual([[w['week'], [[c['year'], c['month'], c['day'], c['inMonth'], c['holiday'], c['occasions']]
-                                           for c in w['days']]] for w in ours], weeks, (jy, jm, ws))
+            hijri = lambda h: h and [h['year'], h['month'], h['day'], h['length']]
+            self.assertEqual([[w['week'], [[c['year'], c['month'], c['day'], c['inMonth'], c['holiday'], c['occasions'],
+                                            hijri(c['hijri'])] for c in w['days']]] for w in ours], weeks, (jy, jm, ws))
+
+    def test_on_this_day(self):
+        self.assertEqual(len(self.js['history']), 2 * 366)
+        for j, g, language, expected in self.js['history']:
+            ours = jalali.on_this_day(self.events, (j['year'], j['month'], j['day']), (g['year'], g['month'], g['day']), language)
+            self.assertEqual([list(e) for e in ours], expected, (j, language))
 
 
 class Basics(unittest.TestCase):
@@ -83,13 +97,27 @@ class Basics(unittest.TestCase):
         self.assertEqual(jalali.step_month(1405, 11, 1), (1406, 0))
         self.assertEqual(jalali.step_month(1405, 0, -1), (1404, 11))
 
+    def test_holidays_match_time_ir(self):
+        """Fridays, the solar list and the lunar list, placed by the Hijri table,
+        give every one of time.ir's holidays for twelve years, and no others."""
+        fixture = json.loads((ROOT / 'tests/timeir-holidays.json').read_text())
+        events = jalali.load_events(ROOT / 'events', english=False)
+        first, last = fixture['years']
+        ours = []
+        for jdn in range(jalali.jalali_to_jdn(first, 0, 1), jalali.jalali_to_jdn(last + 1, 0, 1)):
+            cell = jalali.day_cell(jdn, events)
+            if cell['holiday'] and not cell['weekend']:
+                ours.append('%d-%02d-%02d' % (cell['year'], cell['month'] + 1, cell['day']))
+        self.assertEqual(ours, fixture['holidays'])
+
     def test_every_title_has_english(self):
         events = ROOT / 'events'
         english = json.loads((events / 'en.json').read_text())
-        titles = [item['title'] for name in ('national.json', 'international.json')
-                  for items in json.loads((events / name).read_text()).values() for item in items]
-        titles += [title for path in events.glob('1[0-9][0-9][0-9].json')
-                   for day in json.loads(path.read_text()).values() for title in day['events']]
+        read = lambda name: json.loads((events / name).read_text())
+        titles = [item['title'] for name in ('national.json', 'hijri.json') for items in read(name).values() for item in items]
+        titles += [title for items in read('international.json').values() for title in items]
+        titles += [title for day in read('once.json').values() for title in day.get('events', [])]
+        titles += [title for dates in read('history.json').values() for items in dates.values() for _, title in items]
         self.assertEqual([t for t in titles if t not in english], [], 'add these to events/en.json')
 
 

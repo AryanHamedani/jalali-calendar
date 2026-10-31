@@ -10,11 +10,13 @@ const fs = require("fs")
 const Model = require("../lib/Model.js")
 
 const root = path.join(__dirname, "..")
+const read = name => JSON.parse(fs.readFileSync(path.join(root, "events", name)))
 const events = {
-  national: JSON.parse(fs.readFileSync(path.join(root, "events/national.json"))),
-  international: JSON.parse(fs.readFileSync(path.join(root, "events/international.json"))),
-  years: { 1405: JSON.parse(fs.readFileSync(path.join(root, "events/1405.json"))) }
+  national: read("national.json"), international: read("international.json"), hijri: read("hijri.json"),
+  hijriMonths: Model.hijriMonthTable(read("hijri-months.json")), once: read("once.json"), history: read("history.json")
 }
+// A day by its Gregorian date, as the panel builds it.
+const day = (ev, gy, gm, gd) => Model.dayForDate(new Date(gy, gm - 1, gd), ev)
 const english = Object.assign({ titles: JSON.parse(fs.readFileSync(path.join(root, "events/en.json"))) }, events)
 
 let passed = 0
@@ -104,42 +106,82 @@ test("grid honors a Monday start", () => {
   weeks.forEach(w => assert.strictEqual(w.days[0].weekday, 1))
 })
 
-test("official holidays come from the year's file", () => {
-  const nowruz = Model.occasions(events, { year: 1405, month: 0, day: 1 }, { year: 2026, month: 2, day: 21 })
+test("lunar occasions follow the Hijri months Iran kept", () => {
+  const nowruz = day(events, 2026, 3, 21)   // 1 Farvardin 1405 was also 1 Shawwal
   assert.strictEqual(nowruz.holiday, true)
-  assert.ok(nowruz.titles.some(t => t.includes("نوروز")))
-  assert.ok(nowruz.titles.some(t => t.includes("فطر")))
+  assert.ok(nowruz.occasions.some(t => t.includes("نوروز")))
+  assert.ok(nowruz.occasions.some(t => t.includes("فطر")))
+  assert.deepStrictEqual([nowruz.hijri.year, nowruz.hijri.month, nowruz.hijri.day], [1447, 9, 1])
 
-  const ashura = Model.occasions(events, { year: 1405, month: 3, day: 4 }, { year: 2026, month: 5, day: 25 })
+  const ashura = day(events, 2026, 6, 25)   // 4 Tir 1405
   assert.strictEqual(ashura.holiday, true)
+  assert.ok(ashura.occasions.includes("عاشورای حسینی"))
 })
 
-test("years without a file still keep solar holidays", () => {
-  const revolution = Model.occasions(events, { year: 1410, month: 10, day: 22 }, { year: 2032, month: 1, day: 11 })
+test("the 30th of a lunar month is its last day", () => {
+  // Dhu al-Qadah 1447 had 29 days: Imam Javad's martyrdom fell on the 29th.
+  const javad = day(events, 2026, 5, 17)
+  assert.deepStrictEqual([javad.hijri.month, javad.hijri.day, javad.hijri.length], [10, 29, 29])
+  assert.ok(javad.occasions.some(t => t.includes("محمّد تقی")))
+})
+
+test("past the known Hijri months: solar and Gregorian only, never a guess", () => {
+  const revolution = day(events, 2032, 2, 11)   // 22 Bahman 1410
+  assert.strictEqual(revolution.hijri, null)
   assert.strictEqual(revolution.holiday, true)
-  const plain = Model.occasions(events, { year: 1410, month: 7, day: 3 }, { year: 2031, month: 9, day: 25 })
+  const plain = day(events, 2031, 10, 25)
   assert.strictEqual(plain.holiday, false)
+  assert.strictEqual(Model.hijriDate([], 2460000), null)
 })
 
-test("every occasion has an English title", () => {
+test("30 Esfand exists only in leap years, and is a holiday", () => {
+  const last = day(events, 2025, 3, 20)   // 30 Esfand 1403
+  assert.deepStrictEqual([last.year, last.month, last.day], [1403, 11, 30])
+  assert.strictEqual(last.holiday, true)
+  const next = day(events, 2026, 3, 20)   // 29 Esfand 1404, then Nowruz
+  assert.deepStrictEqual([next.year, next.month, next.day], [1404, 11, 29])
+})
+
+test("one-off dates override the yearly lists", () => {
+  const once = Object.assign({}, events, { once: { "1405-08-09": { holiday: true, events: ["تعطیل"] } } })
+  const cell = day(once, 2026, 10, 31)
+  assert.strictEqual(cell.holiday, true)
+  assert.ok(cell.occasions.includes("تعطیل"))
+})
+
+test("every title has an English one", () => {
   const titles = new Set()
   Object.values(events.national).forEach(m => m.forEach(e => titles.add(e.title)))
-  Object.values(events.international).forEach(m => m.forEach(e => titles.add(e.title)))
-  ;["1404", "1405", "1406"].forEach(y => {
-    const year = JSON.parse(fs.readFileSync(path.join(root, "events", y + ".json")))
-    Object.values(year).forEach(d => d.events.forEach(t => titles.add(t)))
-  })
+  Object.values(events.international).forEach(m => m.forEach(t => titles.add(t)))
+  Object.values(events.hijri).forEach(m => m.forEach(e => titles.add(e.title)))
+  ;["gregorian", "jalali"].forEach(c => Object.values(events.history[c]).forEach(m => m.forEach(e => titles.add(e[1]))))
   titles.forEach(t => assert.ok(english.titles[t], "untranslated: " + t))
 })
 
 test("English titles replace Persian ones", () => {
-  const nowruz = Model.occasions(english, { year: 1405, month: 0, day: 1 }, { year: 2026, month: 2, day: 21 })
-  assert.deepStrictEqual(nowruz.titles.slice(0, 2), ["Nowruz, the Persian New Year", "Eid al-Fitr"])
+  const nowruz = day(english, 2026, 3, 21)
+  assert.deepStrictEqual(nowruz.occasions.slice(0, 2), ["Nowruz, the Persian New Year", "Eid al-Fitr"])
 })
 
-test("international occasions land on their Gregorian date", () => {
-  const christmas = Model.occasions(events, { year: 1405, month: 9, day: 4 }, { year: 2026, month: 11, day: 25 })
-  assert.ok(christmas.titles.some(t => t.includes("کریسمس")))
+test("international occasions land on their Gregorian date, whatever the Jalali one", () => {
+  const christmas = day(events, 2026, 12, 25)
+  assert.ok(christmas.occasions.some(t => t.includes("کریسمس")))
+  // 20 March is 1 Farvardin in some years and 30 or 29 Esfand in others.
+  const months = new Set()
+  for (const gy of [2024, 2025, 2026, 2027]) {
+    const cell = day(events, gy, 3, 20)
+    months.add(cell.month)
+    assert.ok(cell.occasions.includes("روز جهانی شادی"), gy)
+  }
+  assert.deepStrictEqual([...months].sort(), [0, 11])
+})
+
+test("on this day: newest first, year in the reader's calendar", () => {
+  const j = { year: 1405, month: 7, day: 9 }, g = { year: 2026, month: 9, day: 31 }
+  const en = Model.onThisDay(english, j, g, "en")
+  assert.deepStrictEqual(en[0], { year: 1984, title: "Assassination of Indira Gandhi, Prime Minister of India" })
+  assert.strictEqual(Model.onThisDay(events, j, g, "fa")[0].year, 1363)
+  assert.strictEqual(Model.hijriTitle(day(events, 2026, 10, 31).hijri, "en"), "20 Jumada al-Awwal 1448")
 })
 
 test("Fridays are holidays", () => {

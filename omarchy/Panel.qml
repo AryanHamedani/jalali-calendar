@@ -77,20 +77,18 @@ Panel {
   readonly property var weekdays: Model.weekdayOrder(weekStart)
   readonly property var weeks: Model.monthGrid(viewYear, viewMonth, weekStart, todayKey, events)
 
-  // ---- Occasions. The solar and international lists hold for every year;
-  //      the official list (lunar occasions and the holiday roster) ships one
-  //      file per year, loaded for the year on screen and both neighbors so
-  //      the grid's spill-over days are right at Nowruz too.
+  // ---- Occasions, each list keyed by its own calendar so it holds for every
+  //      year; lunar ones are placed by the Hijri months Iran kept (see
+  //      Model.js). Loaded once, whichever month is on screen.
   readonly property string eventsDir: decodeURIComponent(Qt.resolvedUrl("../events").toString().replace(/^file:\/\//, ""))
   readonly property var events: ({
     national: Model.parseEvents(nationalFile.loadedText),
     international: Model.parseEvents(internationalFile.loadedText),
-    titles: root.rtl ? null : Model.parseEvents(englishFile.loadedText),
-    years: Model.eventYears([
-      [viewYear - 1, previousYearFile.loadedText],
-      [viewYear, currentYearFile.loadedText],
-      [viewYear + 1, nextYearFile.loadedText]
-    ])
+    hijri: Model.parseEvents(hijriFile.loadedText),
+    hijriMonths: Model.hijriMonthTable(Model.parseEvents(hijriMonthsFile.loadedText)),
+    once: Model.parseEvents(onceFile.loadedText),
+    history: Model.parseEvents(historyFile.loadedText),
+    titles: root.rtl ? null : Model.parseEvents(englishFile.loadedText)
   })
 
   component EventsFile: FileView {
@@ -104,9 +102,15 @@ Panel {
   EventsFile { id: nationalFile; path: root.eventsDir + "/national.json" }
   EventsFile { id: internationalFile; path: root.eventsDir + "/international.json" }
   EventsFile { id: englishFile; path: root.eventsDir + "/en.json" }
-  EventsFile { id: previousYearFile; path: root.eventsDir + "/" + (root.viewYear - 1) + ".json" }
-  EventsFile { id: currentYearFile; path: root.eventsDir + "/" + root.viewYear + ".json" }
-  EventsFile { id: nextYearFile; path: root.eventsDir + "/" + (root.viewYear + 1) + ".json" }
+  EventsFile { id: hijriFile; path: root.eventsDir + "/hijri.json" }
+  EventsFile { id: hijriMonthsFile; path: root.eventsDir + "/hijri-months.json" }
+  EventsFile { id: onceFile; path: root.eventsDir + "/once.json" }
+  EventsFile { id: historyFile; path: root.eventsDir + "/history.json" }
+
+  // "On this day" for the focused day, this many lines; 0 hides it.
+  readonly property int historyLines: Math.max(0, Math.min(6, Number(setting("onThisDay", 2)) || 0))
+  readonly property var history: historyLines > 0
+    ? Model.onThisDay(events, focusedDay.j, focusedDay.g, language) : []
 
   // The day the occasions list describes: whichever one the pointer is on,
   // otherwise today.
@@ -915,6 +919,18 @@ Panel {
                 }
               }
 
+              // The lunar date, where Iran's months are known; the line stays
+              // either way so the panel keeps its height.
+              Text {
+                textFormat: Text.PlainText
+                width: parent.width
+                horizontalAlignment: Text.AlignRight
+                text: Model.hijriTitle(root.focusedDay.hijri, root.language)
+                color: Qt.darker(root.contentForeground, 1.7)
+                font.family: root.textFontFamily
+                font.pixelSize: Style.font.bodySmall
+              }
+
               Repeater {
                 model: occasionsBlock.lines
 
@@ -939,6 +955,55 @@ Panel {
                     : Qt.darker(root.contentForeground, 1.9)
                   font.family: root.textFontFamily
                   font.pixelSize: Style.font.bodySmall
+                }
+              }
+
+              // ---- On this day: a fixed number of lines, like the
+              //      occasions above, most recent first.
+              Text {
+                visible: root.historyLines > 0
+                textFormat: Text.PlainText
+                topPadding: Style.space(4)
+                text: root.label("onThisDay")
+                color: Qt.darker(root.contentForeground, 1.7)
+                font.family: root.textFontFamily
+                font.pixelSize: Style.font.bodySmall
+                font.bold: true
+              }
+
+              Repeater {
+                model: root.historyLines
+
+                Item {
+                  required property int index
+                  readonly property var entry: index < root.history.length ? root.history[index] : null
+                  width: parent.width
+                  height: Style.space(18)
+
+                  Text {
+                    id: historyYear
+                    textFormat: Text.PlainText
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: Style.space(40)
+                    text: parent.entry && parent.entry.year !== null ? root.digits(parent.entry.year) : (parent.entry ? "·" : "")
+                    color: Qt.darker(root.contentForeground, 1.7)
+                    font.family: root.textFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    anchors.left: historyYear.right
+                    anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
+                    horizontalAlignment: Text.AlignLeft
+                    elide: Text.ElideRight
+                    text: parent.entry ? parent.entry.title : (index === 0 ? "—" : "")
+                    color: Qt.darker(root.contentForeground, 1.2)
+                    font.family: root.textFontFamily
+                    font.pixelSize: Style.font.bodySmall
+                  }
                 }
               }
             }

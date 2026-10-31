@@ -1,10 +1,31 @@
 # Changelog
 
-## Unreleased
+## 2.1.0 (2026-10-31)
 
-- Holidays and occasions stay in step with time.ir: a weekly GitHub Action
-  fetches this Jalali year and the next again and opens a pull request when
-  anything changed, listing each changed day.
+Occasions no longer need a file per year.
+
+- **Every list is keyed by its own calendar**, so it holds for any year: solar
+  occasions by the Jalali date, international ones by the Gregorian date
+  (before, one near a month boundary could go missing in some years), and
+  lunar ones by the Hijri date.
+- **Hijri months as Iran kept them.** `events/hijri-months.json` records the
+  day each month began, from time.ir, Esfand 1394 to Esfand 1406. Lunar
+  occasions are placed by it; a day outside it shows no lunar occasions
+  rather than a guessed one. "The 30th" of a lunar month is its last day.
+- **Holidays match time.ir** for every day from 1395 to 1406. Added 30 Esfand
+  in leap years, and the occasions the lists were missing: World Poetry Day,
+  World Water Day, World Health Day and others in Farvardin; National
+  Mountaineering Day; Sattar Khan's birthday; Physical Education Day moved to
+  26 Mehr.
+- **On this day**: about 700 births, deaths and events from time.ir, with
+  English titles, in the Waybar tooltip (`--on-this-day N`), the Omarchy panel
+  (`onThisDay`) and a new `jalali-calendar on-this-day [DATE]` command. The
+  year is shown in the reader's calendar.
+- **The Hijri date** beside the Gregorian one, for every day the table covers.
+- **Weekly sync with time.ir**: a GitHub Action runs `bin/fetch-events`, now
+  Python, and opens a pull request when a Hijri month moves, a holiday is
+  declared, or time.ir lists something new.
+- `events/once.json` holds anything that happens on one date only.
 
 ## 2.0.1 (2026-10-30)
 

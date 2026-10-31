@@ -16,7 +16,7 @@ jobs:
       - name: Python core and command, cross-checked against the JavaScript core
         run: python3 -m unittest discover -s tests -v
       - name: Shell scripts
-        run: shellcheck install.sh bin/fetch-events
+        run: shellcheck install.sh
       - name: Waybar module is valid JSON once comments are stripped
         run: sed 's#^\s*//.*##' waybar/module.jsonc | jq -e '."custom/jalali".exec'
       - name: Event data is valid JSON

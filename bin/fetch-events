@@ -1,46 +1,154 @@
-#!/bin/bash
+#!/usr/bin/env python3
+"""Bring the event data in step with time.ir, by way of holidayapi.ir.
 
-# Rebuild events/<year>.json from time.ir's official calendar, by way of
-# holidayapi.ir. Lunar dates are fixed each year by moon sighting, so the
-# religious occasions and the official holiday list cannot be computed; they
-# are fetched once per year and shipped with the plugin instead, which keeps
-# the calendar working offline.
-#
-#   bin/fetch-events 1405 1406
+    bin/fetch-events 1405 1406
 
-set -eo pipefail
+Most occasions never need fetching: solar and Gregorian dates repeat every
+year, and lunar ones repeat on their Hijri date. What changes is when each
+Hijri month begins, which Iran fixes by sighting the moon. For each year
+asked for, this
 
-cd "$(dirname "$0")/.."
+  - records the day every Hijri month began in events/hijri-months.json,
+    read off the dates time.ir gives its lunar occasions;
+  - writes into events/once.json any holiday time.ir has that the lists
+    don't explain (or a listed one it drops), for that date only;
+  - prints, as Markdown, every time.ir occasion the bundled lists don't hold
+    and events/skipped.json doesn't set aside, to be added by hand with its
+    English title. Nothing is guessed.
+"""
+from concurrent.futures import ThreadPoolExecutor
+import difflib
+import json
+from pathlib import Path
+import re
+import sys
+import time
+import urllib.request
 
-days_of() {
-  local year=$1 esfand=29
-  # A leap year is one whose 30 Esfand exists.
-  if curl -sf "https://holidayapi.ir/jalali/$year/12/30" >/dev/null; then esfand=30; fi
-  for month in $(seq 1 12); do
-    local days=$(( month <= 6 ? 31 : month <= 11 ? 30 : esfand ))
-    for day in $(seq 1 "$days"); do printf "%d %02d %02d\n" "$year" "$month" "$day"; done
-  done
-}
+ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT / 'lib'))
+import jalali  # noqa: E402
 
-# Fridays are listed as events of their own; the grid knows its weekends.
-# An event's date line names its calendar, so a Hijri month there is what
-# marks it lunar; the solar and Gregorian ones ship in national.json and
-# international.json instead.
-fetch_day() {
-  curl -sf --retry 3 "https://holidayapi.ir/jalali/$1/$2/$3" | jq -c --arg key "$2-$3" '
-    [ .events[] | select(.description != "جمعه") ] as $events
-    | { key: $key,
-        holiday: ($events | any(.is_holiday)),
-        events: [ $events[]
-          | select(.additional_description | test("محرم|صفر|ربیع|جمادی|رجب|شعبان|رمضان|شوال|ذی|ذو"))
-          | .description | gsub("\\s+"; " ") | ltrimstr(" ") | rtrimstr(" ") ] }'
-}
-export -f fetch_day
+EVENTS = ROOT / 'events'
+API = 'https://holidayapi.ir/jalali/%d/%02d/%02d'
+# The service turns away Python's default agent.
+AGENT = 'jalali-calendar (+https://github.com/AryanHamedani/jalali-calendar)'
+DIGITS = str.maketrans('۰۱۲۳۴۵۶۷۸۹', '0123456789')
+SOLAR = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند']
+LUNAR = ['محرم', 'صفر', 'ربیع الاول', 'ربیع الثانی', 'جمادی الاول', 'جمادی الثانیه',
+         'رجب', 'شعبان', 'رمضان', 'شوال', 'ذوالقعده', 'ذوالحجه']
 
-for year in "$@"; do
-  days_of "$year" |
-    xargs -P 8 -n 3 bash -c 'fetch_day "$@"' _ |
-    jq -sc 'map(select(.holiday or (.events | length > 0))) | sort_by(.key) | map({ (.key): del(.key) }) | add' \
-      > "events/$year.json"
-  echo "events/$year.json: $(jq length "events/$year.json") days"
-done
+
+def get(jy, jm, jd):
+    for attempt in range(5):
+        try:
+            request = urllib.request.Request(API % (jy, jm + 1, jd), headers={'User-Agent': AGENT})
+            with urllib.request.urlopen(request, timeout=30) as response:
+                return json.load(response)
+        except (OSError, ValueError):
+            if attempt == 4:
+                raise
+            time.sleep(2 ** attempt)
+
+
+def fetch_year(jy):
+    days = [(jy, m, d) for m in range(12) for d in range(1, jalali.month_length(jy, m) + 1)]
+    with ThreadPoolExecutor(8) as pool:
+        return list(zip(days, pool.map(lambda day: get(*day), days)))
+
+
+def key(text):
+    """A title with spacing, punctuation and digit script taken out, for matching."""
+    text = text.translate(DIGITS).replace('ي', 'ی').replace('ك', 'ک')
+    return re.sub(r'[\s‌‎‏،؛,;:/\\\-\[\]()«»"\'.ـ]+|[ً-ْ]', '', text)
+
+
+def same(a, b):
+    a, b = key(a), key(b)
+    return a == b or a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() > 0.75
+
+
+def label(event):
+    """(kind, month, day, year) from an event's date line, e.g. '۱۰ محرم'."""
+    text = re.sub(r'\s+', ' ', event['additional_description']).strip().replace('اَمرداد', 'مرداد')
+    if m := re.fullmatch(r'([۰-۹]+) (.+?)(?: (\d+))?', text):
+        day, month, year = int(m.group(1).translate(DIGITS)), m.group(2), int(m.group(3) or 0)
+        if month in SOLAR:
+            return ('history' if year else 'solar'), SOLAR.index(month), day, year
+        if month in LUNAR:
+            return 'lunar', LUNAR.index(month), day, 0
+    if m := re.fullmatch(r'([A-Z][a-z]+) (\d+)(?: (\d+))?', text):
+        year = int(m.group(3) or 0)
+        return 'gregorian', jalali.GREGORIAN_MONTHS.index(m.group(1)), int(m.group(2)), 0 if year == 1900 else year
+    return None
+
+
+def main(years):
+    path = EVENTS / 'hijri-months.json'
+    table = json.loads(path.read_text())
+    once = json.loads((EVENTS / 'once.json').read_text())
+    fetched = {jy: fetch_year(jy) for jy in years}
+
+    # Each lunar occasion names its Hijri date, so its day fixes its month's
+    # first day. "The 30th" means the month's last day, so it fixes nothing.
+    starts = {}
+    for days in fetched.values():
+        for (jy, jm, jd), data in days:
+            for event in data['events']:
+                kind, month, day, _ = label(event) or (None,) * 4
+                if kind == 'lunar' and day < 30:
+                    starts[jalali.jalali_to_jdn(jy, jm, jd) - day + 1] = month
+    known = {row['jdn']: '%d-%02d' % (row['year'], row['month'] + 1) for row in jalali.hijri_month_table(table)}
+    for jdn, month in sorted(starts.items()):
+        # Name the month by its neighbour in the table; the table is the anchor.
+        name = next((n for j, n in known.items() if abs(j - jdn) < 20 and int(n[-2:]) == month + 1), None)
+        if name is None:
+            prev = max((j for j in known if j < jdn), default=None)
+            if prev is None or not 29 <= jdn - prev <= 30:
+                sys.exit('fetch-events: %s starts a Hijri month the table cannot place' % (jalali.d2g(jdn),))
+            year, last = map(int, known[prev].split('-'))
+            if last % 12 != month:
+                sys.exit('fetch-events: %s starts a Hijri month out of order' % (jalali.d2g(jdn),))
+            name = '%d-%02d' % (year + (last == 12), last % 12 + 1)
+        known = {j: n for j, n in known.items() if n != name}
+        known[jdn] = name
+    rows = sorted(known.items())
+    for (a, _), (b, name) in zip(rows, rows[1:]):
+        if not 29 <= b - a <= 30:
+            sys.exit('fetch-events: Hijri month %s would be %d days long' % (name, b - a))
+    table = {name: '%04d-%02d-%02d' % (lambda g: (g[0], g[1] + 1, g[2]))(jalali.d2g(jdn)) for jdn, name in rows}
+    path.write_text(json.dumps(dict(sorted(table.items())), ensure_ascii=False, indent=1) + '\n')
+
+    # Holidays the yearly lists don't give, or give where time.ir has none.
+    for jy in years:
+        for name in [n for n in once if n.startswith('%d-' % jy)]:
+            once[name].pop('holiday', None)
+            if not once[name]:
+                del once[name]
+    events = jalali.load_events(EVENTS, english=False)
+    events['hijriMonths'] = jalali.hijri_month_table(table)
+    events['once'] = once
+    skipped = {key(t) for t in json.loads((EVENTS / 'skipped.json').read_text())['titles']}
+    report = []
+    for days in fetched.values():
+        for (jy, jm, jd), data in days:
+            cell = jalali.day_cell(jalali.jalali_to_jdn(jy, jm, jd), events)
+            date = '%d-%02d-%02d' % (jy, jm + 1, jd)
+            if cell['holiday'] != data['is_holiday']:
+                once.setdefault(date, {})['holiday'] = data['is_holiday']
+                report.append('- %s: time.ir says %s holiday; kept in once.json' % (date, 'a' if data['is_holiday'] else 'no'))
+            history = [t for _, t in jalali.on_this_day(events, (jy, jm, jd), cell['gregorian'], 'fa')]
+            for event in data['events']:
+                kind = (label(event) or ('none',))[0]
+                title = re.sub(r'\s+', ' ', event['description']).strip()
+                if title == 'جمعه' or key(title) in skipped or any(same(title, t) for t in cell['occasions'] + history):
+                    continue
+                report.append('- %s (%s): %s — `%s`' % (date, kind, title, event['additional_description'].strip()))
+    (EVENTS / 'once.json').write_text(json.dumps(dict(sorted(once.items())), ensure_ascii=False, indent=1) + '\n')
+    print('\n'.join(report))
+
+
+if __name__ == '__main__':
+    if len(sys.argv) < 2 or not all(a.isdigit() for a in sys.argv[1:]):
+        sys.exit(__doc__.strip())
+    main([int(a) for a in sys.argv[1:]])

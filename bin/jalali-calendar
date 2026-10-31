@@ -5,6 +5,7 @@
     jalali-calendar date [FORMAT]       now, in a format (see the README)
     jalali-calendar convert DATE        2026-10-30 <-> 1405-08-08 (years before 1700 are Jalali)
     jalali-calendar month [YEAR MONTH]  a month in the terminal, holidays in red
+    jalali-calendar on-this-day [DATE]  what happened on this day in history
     jalali-calendar waybar              label and calendar tooltip as one JSON line
     jalali-calendar shift -1|+1|0       step the tooltip's month; 0 goes back to today
 
@@ -14,6 +15,7 @@ Options, anywhere on the line:
     --format FORMAT           label for `waybar` (default: dddd d MMMM HH:mm)
     --holiday-color COLOR     tooltip color for Fridays and holidays (default #f7768e)
     --today-color COLOR       tooltip highlight for today (default #7aa2f7)
+    --on-this-day N           "on this day" lines in the tooltip (default 3, 0 hides them)
 """
 from datetime import date, datetime
 import html
@@ -55,7 +57,7 @@ OFFSET_TTL = 120
 
 def parse_options(argv):
     opts = {'language': 'en', 'week-start': 'saturday', 'format': 'dddd d MMMM HH:mm',
-            'holiday-color': '#f7768e', 'today-color': '#7aa2f7'}
+            'holiday-color': '#f7768e', 'today-color': '#7aa2f7', 'on-this-day': '3'}
     args, i = [], 0
     while i < len(argv):
         if argv[i].startswith('--') and argv[i][2:] in opts:
@@ -67,11 +69,14 @@ def parse_options(argv):
             args.append(argv[i])
             i += 1
     opts['language'] = jalali.lang(opts['language'])
+    if not opts['on-this-day'].isdigit():
+        sys.exit('jalali-calendar: --on-this-day takes a number')
+    opts['on-this-day'] = int(opts['on-this-day'])
     return args, opts
 
 
-def events_for(jy, language):
-    return jalali.load_events(EVENTS, years=(jy - 1, jy, jy + 1), english=language == 'en')
+def events_for(language):
+    return jalali.load_events(EVENTS, english=language == 'en')
 
 
 def day_title(cell, language):
@@ -79,15 +84,24 @@ def day_title(cell, language):
                                                    jalali.MONTHS[language][cell['month']], cell['year']), language)
 
 
-def gregorian_title(cell):
+def gregorian_title(cell, language='en', ltr=lambda text: text):
+    """The Gregorian date and, where Iran's lunar calendar is known, the Hijri one."""
     gy, gm, gd = cell['gregorian']
-    return '%d %s %d' % (gd, jalali.GREGORIAN_MONTHS[gm], gy)
+    hijri = jalali.hijri_title(cell['hijri'], language)
+    # In Persian the mark keeps the Hijri day's digits with its month, right to left.
+    mark = RLM if language == 'fa' else ''
+    return ltr('%d %s %d' % (gd, jalali.GREGORIAN_MONTHS[gm], gy)) + (' · ' + mark + hijri if hijri else '')
+
+
+def history_lines(cell, events, language):
+    return ['%s  %s' % (jalali.localize_digits(str(year), language) if year else '·', title)
+            for year, title in jalali.on_this_day(events, (cell['year'], cell['month'], cell['day']), cell['gregorian'], language)]
 
 
 def month_view(jy, jm, opts, today):
     """Rows of the month grid as (week, [cells]) in display order, and the header."""
     language = opts['language']
-    events = events_for(jy, language)
+    events = events_for(language)
     weeks = jalali.month_grid(jy, jm, opts['week-start'], events, jalali.jdn_of(today))
     order = jalali.WEEKDAY_SHORT[language]
     heads = [order[c['weekday']] for c in weeks[0]['days']]
@@ -182,11 +196,19 @@ def waybar(opts, now=None):
         lines.append(line(number + gutter + ' '.join(cells)))
     lines[-1] += '</tt>'
 
-    today_cell = jalali.day_cell(jalali.jdn_of(now.date()), events_for(jy, language), jalali.jdn_of(now.date()))
+    today_cell = jalali.day_cell(jalali.jdn_of(now.date()), events, jalali.jdn_of(now.date()))
     lines.append('')
-    lines.append(line('<b>%s</b>  <span alpha="60%%">%s</span>' % (esc(day_title(today_cell, language)), ltr(gregorian_title(today_cell)))))
+    lines.append(line('<b>%s</b>' % esc(day_title(today_cell, language))))
+    lines.append(line('<span alpha="60%%">%s</span>' % gregorian_title(today_cell, language, lambda s: ltr(esc(s)))))
     for t in today_cell['occasions'][:4]:
         lines.append(line('  ' + esc(t)))
+    history = history_lines(today_cell, events, language)[:opts['on-this-day']]
+    if history:
+        lines.append('')
+        lines.append(line('<span alpha="60%%">%s</span>' % ('در چنین روزی' if rtl else 'On this day')))
+        for h in history:
+            year, _, title = h.partition('  ')
+            lines.append(line('<span alpha="60%%">%s</span>  %s' % (esc(year.rjust(4)), esc(title))))
     holidays = [c for w in weeks for c in w['days'] if c['inMonth'] and c['holiday'] and not c['weekend'] and c['occasions']]
     if holidays:
         lines.append('')
@@ -210,6 +232,36 @@ def shift(value):
         OFFSET.write_text(str(read_offset() + int(value)))
     # Redraw now rather than at the next tick; matches "signal" in the module.
     subprocess.run(['pkill', '-RTMIN+%d' % SIGNAL, 'waybar'], check=False, capture_output=True)
+
+
+def parse_date(text):
+    """A Jalali or Gregorian date (years before 1700 are Jalali) as a JDN."""
+    match = re.fullmatch(r'(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,2})', text.strip())
+    if not match:
+        sys.exit('jalali-calendar: dates look like 1405-08-08 or 2026-10-30')
+    y, m, d = (int(x) for x in match.groups())
+    if y < 1700:
+        if not (1 <= m <= 12 and 1 <= d <= jalali.month_length(y, m - 1)):
+            sys.exit('jalali-calendar: %s is not a Jalali date' % text)
+        return jalali.jalali_to_jdn(y, m - 1, d)
+    try:
+        return jalali.jdn_of(date(y, m, d))
+    except ValueError:
+        sys.exit('jalali-calendar: %s is not a Gregorian date' % text)
+
+
+def on_this_day(args, opts):
+    language = opts['language']
+    jdn = parse_date(args[1]) if len(args) > 1 else jalali.jdn_of(date.today())
+    events = events_for(language)
+    cell = jalali.day_cell(jdn, events, jdn)
+    print('%s  %s' % (day_title(cell, language), gregorian_title(cell, language)))
+    for t in cell['occasions']:
+        print('  ' + t)
+    lines = history_lines(cell, events, language)
+    if lines:
+        print('\n' + ('در چنین روزی' if language == 'fa' else 'On this day'))
+        print('\n'.join('  ' + line for line in lines))
 
 
 def convert(text, opts):
@@ -251,6 +303,8 @@ def main(argv):
         else:
             jy, jm, _ = jalali.jalali_for(date.today())
             terminal_month(jy, jm, opts)
+    elif command in ('on-this-day', 'otd') and len(args) <= 2:
+        on_this_day(args, opts)
     elif command == 'waybar':
         import json
         print(json.dumps(waybar(opts), ensure_ascii=False))
