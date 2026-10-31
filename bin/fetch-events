@@ -145,7 +145,8 @@ def main(years):
                     continue
                 report.append('- %s (%s): %s — `%s`' % (date, kind, title, event['additional_description'].strip()))
     (EVENTS / 'once.json').write_text(json.dumps(dict(sorted(once.items())), ensure_ascii=False, indent=1) + '\n')
-    print('\n'.join(report))
+    if report:
+        print('\n'.join(report))
 
 
 if __name__ == '__main__':
