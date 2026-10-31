@@ -65,7 +65,7 @@ def key(text):
 
 def same(a, b):
     a, b = key(a), key(b)
-    return a == b or a in b or b in a or difflib.SequenceMatcher(None, a, b).ratio() > 0.75
+    return a == b or bool(a and b and (a in b or b in a)) or difflib.SequenceMatcher(None, a, b).ratio() > 0.75
 
 
 def label(event):
@@ -77,7 +77,7 @@ def label(event):
             return ('history' if year else 'solar'), SOLAR.index(month), day, year
         if month in LUNAR:
             return 'lunar', LUNAR.index(month), day, 0
-    if m := re.fullmatch(r'([A-Z][a-z]+) (\d+)(?: (\d+))?', text):
+    if (m := re.fullmatch(r'([A-Z][a-z]+) (\d+)(?: (\d+))?', text)) and m.group(1) in jalali.GREGORIAN_MONTHS:
         year = int(m.group(3) or 0)
         return 'gregorian', jalali.GREGORIAN_MONTHS.index(m.group(1)), int(m.group(2)), 0 if year == 1900 else year
     return None
@@ -87,7 +87,10 @@ def main(years):
     path = EVENTS / 'hijri-months.json'
     table = json.loads(path.read_text())
     once = json.loads((EVENTS / 'once.json').read_text())
-    fetched = {jy: fetch_year(jy) for jy in years}
+    try:
+        fetched = {jy: fetch_year(jy) for jy in years}
+    except (OSError, ValueError) as error:  # nothing has been written yet
+        sys.exit('fetch-events: could not read holidayapi.ir (%s); no file was changed' % error)
 
     # Each lunar occasion names its Hijri date, so its day fixes its month's
     # first day. "The 30th" means the month's last day, so it fixes nothing.
@@ -98,17 +101,21 @@ def main(years):
                 kind, month, day, _ = label(event) or (None,) * 4
                 if kind == 'lunar' and day < 30:
                     starts[jalali.jalali_to_jdn(jy, jm, jd) - day + 1] = month
+    report = []
     known = {row['jdn']: '%d-%02d' % (row['year'], row['month'] + 1) for row in jalali.hijri_month_table(table)}
     for jdn, month in sorted(starts.items()):
         # Name the month by its neighbour in the table; the table is the anchor.
         name = next((n for j, n in known.items() if abs(j - jdn) < 20 and int(n[-2:]) == month + 1), None)
         if name is None:
             prev = max((j for j in known if j < jdn), default=None)
-            if prev is None or not 29 <= jdn - prev <= 30:
-                sys.exit('fetch-events: %s starts a Hijri month the table cannot place' % (jalali.d2g(jdn),))
+            # A month time.ir gives no occasion for leaves a gap: the table
+            # stops short of it, and says so, rather than the whole sync failing.
+            if prev is None or not 29 <= jdn - prev <= 30 or int(known[prev][-2:]) % 12 != month:
+                gy, gm, gd = jalali.d2g(jdn)
+                report.append('- Hijri month %d starting %04d-%02d-%02d not placed: the month before it has no known start'
+                              % (month + 1, gy, gm + 1, gd))
+                continue
             year, last = map(int, known[prev].split('-'))
-            if last % 12 != month:
-                sys.exit('fetch-events: %s starts a Hijri month out of order' % (jalali.d2g(jdn),))
             name = '%d-%02d' % (year + (last == 12), last % 12 + 1)
         known = {j: n for j, n in known.items() if n != name}
         known[jdn] = name
@@ -116,7 +123,7 @@ def main(years):
     for (a, _), (b, name) in zip(rows, rows[1:]):
         if not 29 <= b - a <= 30:
             sys.exit('fetch-events: Hijri month %s would be %d days long' % (name, b - a))
-    table = {name: '%04d-%02d-%02d' % (lambda g: (g[0], g[1] + 1, g[2]))(jalali.d2g(jdn)) for jdn, name in rows}
+    table = {name: '%04d-%02d-%02d' % (gy, gm + 1, gd) for jdn, name in rows for gy, gm, gd in [jalali.d2g(jdn)]}
     path.write_text(json.dumps(dict(sorted(table.items())), ensure_ascii=False, indent=1) + '\n')
 
     # Holidays the yearly lists don't give, or give where time.ir has none.
@@ -129,7 +136,6 @@ def main(years):
     events['hijriMonths'] = jalali.hijri_month_table(table)
     events['once'] = once
     skipped = {key(t) for t in json.loads((EVENTS / 'skipped.json').read_text())['titles']}
-    report = []
     for days in fetched.values():
         for (jy, jm, jd), data in days:
             cell = jalali.day_cell(jalali.jalali_to_jdn(jy, jm, jd), events)
@@ -145,6 +151,18 @@ def main(years):
                     continue
                 report.append('- %s (%s): %s — `%s`' % (date, kind, title, event['additional_description'].strip()))
     (EVENTS / 'once.json').write_text(json.dumps(dict(sorted(once.items())), ensure_ascii=False, indent=1) + '\n')
+
+    # The test fixture is time.ir's own holiday list; refresh the years fetched
+    # so a revised moon sighting doesn't fail the tests with the new data.
+    fixture_path = ROOT / 'tests' / 'timeir-holidays.json'
+    fixture = json.loads(fixture_path.read_text())
+    first, last = fixture['years']
+    if first - 1 <= min(years) and max(years) <= last + 1:
+        holidays = {d for d in fixture['holidays'] if int(d[:4]) not in years}
+        holidays |= {'%d-%02d-%02d' % (jy, jm + 1, jd) for days in fetched.values() for (jy, jm, jd), data in days
+                     if data['is_holiday'] and jalali.weekday_of_jdn(jalali.jalali_to_jdn(jy, jm, jd)) != 5}
+        fixture.update(years=[min(first, *years), max(last, *years)], holidays=sorted(holidays))
+        fixture_path.write_text(json.dumps(fixture, ensure_ascii=False, indent=0))
     if report:
         print('\n'.join(report))
 

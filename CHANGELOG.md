@@ -26,6 +26,11 @@ Occasions no longer need a file per year.
   Python, and opens a pull request when a Hijri month moves, a holiday is
   declared, or time.ir lists something new.
 - `events/once.json` holds anything that happens on one date only.
+- **Sturdier with hand-edited data**: a missing, broken or oddly shaped events
+  file costs the affected days their occasions, never the grid or the bar
+  label; the Waybar module always prints a label. Everything runs offline;
+  only `bin/fetch-events` uses the network, and it changes no file when it
+  can't reach time.ir.
 
 ## 2.0.1 (2026-10-30)
 

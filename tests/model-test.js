@@ -184,6 +184,20 @@ test("on this day: newest first, year in the reader's calendar", () => {
   assert.strictEqual(Model.hijriTitle(day(events, 2026, 10, 31).hijri, "en"), "20 Jumada al-Awwal 1448")
 })
 
+test("damaged data costs occasions, not the calendar", () => {
+  const damaged = JSON.parse(`{"national": {"01": "x", "02": [1, {"day": "a"}], "08": [null]}, "international": {"03-20": "str", "06-25": [5, "ok"]},
+ "hijri": {"01-10": "x", "01-09": [3], "02-29": [{"title": null}]}, "once": {"1405-04-04": "x", "1405-08-09": {"events": "abc", "holiday": "yes"}},
+ "history": {"gregorian": {"06-25": ["x", [1], [null, 5], ["1900", "t"], [1.5, "t"], [1979, "kept"]]}, "jalali": 5}, "titles": {"constructor": 1}}`)
+  damaged.hijriMonths = Model.hijriMonthTable({ "1448-13": "2026-13-01", x: "y", "1448-01": 12 })
+  for (let m = 0; m < 12; m++)
+    Model.monthGrid(1405, m, 6, "", damaged).forEach(w => w.days.forEach(c => assert.ok(c.occasions.every(t => typeof t === "string"))))
+  const j = { year: 1405, month: 3, day: 4 }, g = { year: 2026, month: 5, day: 25 }
+  assert.deepStrictEqual(Model.occasions(damaged, j, g, null), { holiday: false, titles: ["ok"] })
+  assert.deepStrictEqual(Model.onThisDay(damaged, j, g, "fa"), [{ year: 1358, title: "kept" }])
+  assert.deepStrictEqual(Model.parseEvents("[1,2]"), {})
+  assert.deepStrictEqual(Model.parseEvents("{broken"), {})
+})
+
 test("Fridays are holidays", () => {
   const weeks = Model.monthGrid(1405, 7, 6, "", events)
   weeks.forEach(w => assert.strictEqual(w.days[6].holiday, true))

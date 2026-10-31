@@ -12,6 +12,9 @@ import sys
 import unittest
 
 ROOT = Path(__file__).resolve().parent.parent
+DAMAGED = '''{"national": {"01": "x", "02": [1, {"day": "a"}], "08": [null]}, "international": {"03-20": "str", "06-25": [5, "ok"]},
+ "hijri": {"01-10": "x", "01-09": [3], "02-29": [{"title": null}]}, "once": {"1405-04-04": "x", "1405-08-09": {"events": "abc", "holiday": "yes"}},
+ "history": {"gregorian": {"06-25": ["x", [1], [null, 5], ["1900", "t"], [1.5, "t"], [1979, "kept"]]}, "jalali": 5}, "titles": {"constructor": 1}}'''
 sys.path.insert(0, str(ROOT / 'lib'))
 import jalali  # noqa: E402
 
@@ -96,6 +99,16 @@ class Basics(unittest.TestCase):
     def test_step_month(self):
         self.assertEqual(jalali.step_month(1405, 11, 1), (1406, 0))
         self.assertEqual(jalali.step_month(1405, 0, -1), (1404, 11))
+
+    def test_damaged_data_costs_occasions_not_the_calendar(self):
+        events = json.loads(DAMAGED)
+        events['hijriMonths'] = jalali.hijri_month_table({'1448-13': '2026-13-01', 'x': 'y', '1448-01': 12})
+        for jdn in range(jalali.jalali_to_jdn(1405, 0, 1), jalali.jalali_to_jdn(1406, 0, 1)):
+            cell = jalali.day_cell(jdn, events)
+            self.assertTrue(all(isinstance(t, str) for t in cell['occasions']))
+        self.assertEqual(jalali.occasions(events, (1405, 3, 4), (2026, 5, 25)), (False, ['ok']))
+        self.assertEqual(jalali.on_this_day(events, (1405, 3, 4), (2026, 5, 25), 'fa'), [(1358, 'kept')])
+        self.assertEqual(jalali.load_events(ROOT / 'no-such-folder')['national'], {})
 
     def test_holidays_match_time_ir(self):
         """Fridays, the solar list and the lunar list, placed by the Hijri table,

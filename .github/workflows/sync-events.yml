@@ -25,7 +25,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          git add events
+          git add events tests/timeir-holidays.json
           if git diff --cached --quiet && [ ! -s report.md ]; then echo "Already in step with time.ir"; exit 0; fi
           {
             if [ -s report.md ]; then
@@ -34,7 +34,7 @@ jobs:
             fi
             git diff --cached --quiet || echo "Data changed (before → after):"
             echo
-            for f in $(git diff --cached --name-only); do
+            for f in $(git diff --cached --name-only -- events); do
               echo "**$f**"
               jq -rn --argjson old "$(git show "HEAD:$f" 2>/dev/null || echo '{}')" --slurpfile new "$f" '
                 $new[0] as $n | ([$old, $n] | map(keys) | add | unique)[] as $k
@@ -46,12 +46,19 @@ jobs:
             if python3 -m unittest discover -s tests >test.log 2>&1; then
               echo "Tests pass with the new data."
             else
-              echo "**Tests fail with the new data.** New occasion names need an English title in events/en.json:"
+              echo "**Tests fail with the new data.** Read the failures below before merging:"
               echo; echo '```'; tail -n 30 test.log; echo '```'
             fi
           } > body.md
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Someone has worked on the open pull request: leave their commits
+          # alone, and post this week's findings there instead.
+          humans=$(gh pr view events-sync --json state,commits -q 'select(.state == "OPEN") | [.commits[].authors[].email | select(. != "41898282+github-actions[bot]@users.noreply.github.com")] | length' 2>/dev/null || true)
+          if [ "${humans:-0}" -gt 0 ]; then
+            gh pr comment events-sync --body-file body.md
+            exit 0
+          fi
           git switch -C events-sync
           git commit -qm "Sync holidays and occasions with time.ir" --allow-empty
           git push -f origin events-sync

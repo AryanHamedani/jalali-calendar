@@ -94,7 +94,8 @@ def gregorian_title(cell, language='en', ltr=lambda text: text):
 
 
 def history_lines(cell, events, language):
-    return ['%s  %s' % (jalali.localize_digits(str(year), language) if year else '·', title)
+    """[(year as text, title)] for "on this day"; '·' for an entry without a year."""
+    return [(jalali.localize_digits(str(year), language) if year is not None else '·', title)
             for year, title in jalali.on_this_day(events, (cell['year'], cell['month'], cell['day']), cell['gregorian'], language)]
 
 
@@ -206,8 +207,7 @@ def waybar(opts, now=None):
     if history:
         lines.append('')
         lines.append(line('<span alpha="60%%">%s</span>' % ('در چنین روزی' if rtl else 'On this day')))
-        for h in history:
-            year, _, title = h.partition('  ')
+        for year, title in history:
             lines.append(line('<span alpha="60%%">%s</span>  %s' % (esc(year.rjust(4)), esc(title))))
     holidays = [c for w in weeks for c in w['days'] if c['inMonth'] and c['holiday'] and not c['weekend'] and c['occasions']]
     if holidays:
@@ -235,24 +235,26 @@ def shift(value):
 
 
 def parse_date(text):
-    """A Jalali or Gregorian date (years before 1700 are Jalali) as a JDN."""
+    """(JDN, is Jalali) of a Jalali or Gregorian date; years before 1700 are Jalali."""
     match = re.fullmatch(r'(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,2})', text.strip())
     if not match:
         sys.exit('jalali-calendar: dates look like 1405-08-08 or 2026-10-30')
     y, m, d = (int(x) for x in match.groups())
+    if not 1 <= m <= 12:
+        sys.exit('jalali-calendar: %s has no month %d' % (text, m))
     if y < 1700:
-        if not (1 <= m <= 12 and 1 <= d <= jalali.month_length(y, m - 1)):
+        if not 1 <= d <= jalali.month_length(y, m - 1):
             sys.exit('jalali-calendar: %s is not a Jalali date' % text)
-        return jalali.jalali_to_jdn(y, m - 1, d)
+        return jalali.jalali_to_jdn(y, m - 1, d), True
     try:
-        return jalali.jdn_of(date(y, m, d))
+        return jalali.jdn_of(date(y, m, d)), False
     except ValueError:
         sys.exit('jalali-calendar: %s is not a Gregorian date' % text)
 
 
 def on_this_day(args, opts):
     language = opts['language']
-    jdn = parse_date(args[1]) if len(args) > 1 else jalali.jdn_of(date.today())
+    jdn = parse_date(args[1])[0] if len(args) > 1 else jalali.jdn_of(date.today())
     events = events_for(language)
     cell = jalali.day_cell(jdn, events, jdn)
     print('%s  %s' % (day_title(cell, language), gregorian_title(cell, language)))
@@ -261,26 +263,16 @@ def on_this_day(args, opts):
     lines = history_lines(cell, events, language)
     if lines:
         print('\n' + ('در چنین روزی' if language == 'fa' else 'On this day'))
-        print('\n'.join('  ' + line for line in lines))
+        print('\n'.join('  %s  %s' % line for line in lines))
 
 
 def convert(text, opts):
-    match = re.fullmatch(r'(\d{1,4})[-/.](\d{1,2})[-/.](\d{1,2})', text.strip())
-    if not match:
-        sys.exit('jalali-calendar: dates look like 1405-08-08 or 2026-10-30')
-    y, m, d = (int(x) for x in match.groups())
-    if not 1 <= m <= 12:
-        sys.exit('jalali-calendar: %s has no month %d' % (text, m))
-    if y < 1700:
-        if not (1 <= m <= 12 and 1 <= d <= jalali.month_length(y, m - 1)):
-            sys.exit('jalali-calendar: %s is not a Jalali date' % text)
-        gy, gm, gd = jalali.to_gregorian(y, m - 1, d)
+    jdn, is_jalali = parse_date(text)
+    if is_jalali:
+        gy, gm, gd = jalali.d2g(jdn)
         print('%04d-%02d-%02d' % (gy, gm + 1, gd))
     else:
-        try:
-            jy, jm, jd = jalali.jalali_for(date(y, m, d))
-        except ValueError:
-            sys.exit('jalali-calendar: %s is not a Gregorian date' % text)
+        jy, jm, jd = jalali.jdn_to_jalali(jdn)
         print(jalali.localize_digits('%04d-%02d-%02d' % (jy, jm + 1, jd), opts['language']))
 
 
@@ -307,7 +299,12 @@ def main(argv):
         on_this_day(args, opts)
     elif command == 'waybar':
         import json
-        print(json.dumps(waybar(opts), ensure_ascii=False))
+        try:
+            out = waybar(opts)
+        except Exception as error:  # the bar must always get a label
+            out = {'text': esc(jalali.format_jalali(datetime.now(), opts['format'], opts['language'])),
+                   'tooltip': esc('jalali-calendar: %s' % error), 'class': ['error'], 'alt': 'error'}
+        print(json.dumps(out, ensure_ascii=False))
     elif command == 'shift' and len(args) == 2 and re.fullmatch(r'[+-]?\d+|today', args[1]):
         shift(args[1])
     else:

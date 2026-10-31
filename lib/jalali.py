@@ -219,9 +219,10 @@ def load_events(directory, english=True):
 
     def read(name):
         try:
-            return json.loads((directory / name).read_text())
+            data = json.loads((directory / name).read_text())
         except (OSError, ValueError):
             return {}
+        return data if isinstance(data, dict) else {}
     return {'national': read('national.json'), 'international': read('international.json'),
             'hijri': read('hijri.json'), 'hijriMonths': hijri_month_table(read('hijri-months.json')),
             'once': read('once.json'), 'history': read('history.json'),
@@ -231,10 +232,10 @@ def load_events(directory, english=True):
 def hijri_month_table(table):
     """{"1448-05": "2026-10-23"} -> [{jdn, year, month}] in date order, month 0-based."""
     rows = []
-    for name, start in (table or {}).items():
+    for name, start in (table if isinstance(table, dict) else {}).items():
         h = re.fullmatch(r'(\d+)-(\d\d)', name)
         g = re.fullmatch(r'(\d{4})-(\d\d)-(\d\d)', str(start))
-        if h and g:
+        if h and g and 1 <= int(h.group(2)) <= 12 and 1 <= int(g.group(2)) <= 12:
             rows.append({'jdn': g2d(*map(int, g.groups())), 'year': int(h.group(1)), 'month': int(h.group(2)) - 1})
     return sorted(rows, key=lambda r: r['jdn'])
 
@@ -255,48 +256,66 @@ def hijri_date(months, jdn):
     return None
 
 
+def _dict(value):
+    return value if isinstance(value, dict) else {}
+
+
+def _list(value):
+    return value if isinstance(value, list) else []
+
+
+def _entries(items):
+    """Occasions with a text title; anything else in a hand-edited file is passed over."""
+    return [e for e in _list(items) if isinstance(e, dict) and isinstance(e.get('title'), str)]
+
+
+def _texts(items):
+    return [t for t in _list(items) if isinstance(t, str)]
+
+
 def occasions(events, j, g, h=None):
     """(holiday, titles) for Jalali j and Gregorian g, both (y, m0, d), and Hijri h."""
     titles, holiday = [], False
-    for item in (events.get('national') or {}).get(pad2(j[1] + 1), []):
+    for item in _entries(_dict(events.get('national')).get(pad2(j[1] + 1))):
         if item.get('day') == j[2]:
             titles.append(item['title'])
             holiday = holiday or item.get('holiday') is True
     if h:
-        hijri = events.get('hijri') or {}
-        lunar = list(hijri.get('%s-%s' % (pad2(h['month'] + 1), pad2(h['day'])), []))
+        hijri = _dict(events.get('hijri'))
+        lunar = _entries(hijri.get('%s-%s' % (pad2(h['month'] + 1), pad2(h['day']))))
         if h['day'] == 29 and h['length'] == 29:  # "the 30th" is the last day
-            lunar += [e for e in hijri.get(pad2(h['month'] + 1) + '-30', []) if e.get('last')]
+            lunar += [e for e in _entries(hijri.get(pad2(h['month'] + 1) + '-30')) if e.get('last') is True]
         for item in lunar:
             titles.append(item['title'])
             holiday = holiday or item.get('holiday') is True
-    once = (events.get('once') or {}).get('%d-%s-%s' % (j[0], pad2(j[1] + 1), pad2(j[2])))
-    if once:
-        titles += once.get('events', [])
-        if isinstance(once.get('holiday'), bool):
-            holiday = once['holiday']
-    titles += (events.get('international') or {}).get('%s-%s' % (pad2(g[1] + 1), pad2(g[2])), [])
-    english = events.get('titles')
-    if english:
-        titles = [english.get(t, t) for t in titles]
-    return holiday, titles
+    once = _dict(_dict(events.get('once')).get('%d-%s-%s' % (j[0], pad2(j[1] + 1), pad2(j[2]))))
+    titles += _texts(once.get('events'))
+    if isinstance(once.get('holiday'), bool):
+        holiday = once['holiday']
+    titles += _texts(_dict(events.get('international')).get('%s-%s' % (pad2(g[1] + 1), pad2(g[2]))))
+    english = _dict(events.get('titles'))
+    return holiday, [english[t] if isinstance(english.get(t), str) else t for t in titles]
 
 
 def on_this_day(events, j, g, language='en'):
     """[(year, title)], most recent first; the year in the reader's calendar."""
     language = lang(language)
-    history = events.get('history') or {}
-    english = (events.get('titles') or {}) if language == 'en' else None
+    history = _dict(events.get('history'))
+    english = _dict(events.get('titles')) if language == 'en' else None
     out = []
 
     def add(items, year_in):
-        for year, title in items or []:
-            if english is not None and title not in english:
+        for item in _list(items):
+            if not (isinstance(item, list) and len(item) == 2 and isinstance(item[1], str)
+                    and (item[0] is None or type(item[0]) is int)):
+                continue
+            year, title = item
+            if english is not None and not isinstance(english.get(title), str):
                 continue
             out.append((None if year is None else year_in(year), english[title] if english is not None else title))
-    add(history.get('gregorian', {}).get('%s-%s' % (pad2(g[1] + 1), pad2(g[2]))),
+    add(_dict(history.get('gregorian')).get('%s-%s' % (pad2(g[1] + 1), pad2(g[2]))),
         lambda y: y if language == 'en' else jdn_to_jalali(g2d(y, g[1] + 1, g[2]))[0])
-    add(history.get('jalali', {}).get('%s-%s' % (pad2(j[1] + 1), pad2(j[2]))),
+    add(_dict(history.get('jalali')).get('%s-%s' % (pad2(j[1] + 1), pad2(j[2]))),
         lambda y: y if language == 'fa' else d2g(jalali_to_jdn(y, j[1], min(j[2], month_length(y, j[1]))))[0])
     return sorted(out, key=lambda e: -1e9 if e[0] is None else e[0], reverse=True)
 
@@ -332,8 +351,12 @@ def day_cell(jdn, events, today_jdn=None):
     j = jdn_to_jalali(jdn)
     g = d2g(jdn)
     weekday = weekday_of_jdn(jdn)
-    h = hijri_date(events.get('hijriMonths'), jdn)
-    holiday, titles = occasions(events, j, g, h)
+    try:
+        h = hijri_date(events.get('hijriMonths'), jdn)
+        holiday, titles = occasions(events, j, g, h)
+    except (TypeError, KeyError, AttributeError, ValueError, IndexError):
+        # A damaged events file costs that day its occasions, never the grid.
+        h, holiday, titles = None, False, []
     return {'jdn': jdn, 'year': j[0], 'month': j[1], 'day': j[2],
             'gregorian': g, 'hijri': h, 'weekday': weekday, 'weekend': weekday == 5,
             'holiday': weekday == 5 or holiday, 'occasions': titles, 'today': jdn == today_jdn}
