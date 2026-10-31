@@ -1,0 +1,53 @@
+# Keeps events/<year>.json in step with time.ir: lunar holidays are fixed by
+# moon sighting and the official calendar is approved late, so this year's and
+# next year's files are fetched again every week. Changes arrive as a pull
+# request, to be read before they ship.
+name: sync events
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  actions: write
+concurrency: sync-events
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Fetch this Jalali year and the next
+        run: |
+          year=$(python3 -c 'import sys; sys.path[:0] = ["lib"]; import jalali; print(jalali.jalali_for(jalali.date.today())[0])')
+          bin/fetch-events "$year" "$((year + 1))"
+      - name: Open or update the pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git add events
+          if git diff --cached --quiet; then echo "Already in step with time.ir"; exit 0; fi
+          {
+            echo "time.ir's calendar changed for these days (before → after):"
+            echo
+            for f in $(git diff --cached --name-only); do
+              echo "**$f**"
+              jq -rn --argjson old "$(git show "HEAD:$f" 2>/dev/null || echo '{}')" --slurpfile new "$f" '
+                $new[0] as $n | ([$old, $n] | map(keys) | add | unique)[] as $k
+                | select($old[$k] != $n[$k])
+                | "- \($k): \($old[$k] | if . then "`\(tojson)`" else "none" end) → \($n[$k] | if . then "`\(tojson)`" else "none" end)"'
+              echo
+            done
+            echo "New occasion names need an English title in events/en.json; the test run below says if any are missing."
+          } > body.md
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C events-sync
+          git commit -qm "Sync holidays and occasions with time.ir"
+          git push -f origin events-sync
+          if gh pr view events-sync --json state -q .state 2>/dev/null | grep -qx OPEN; then
+            gh pr edit events-sync --body-file body.md
+          else
+            gh pr create --head events-sync --title "Sync holidays and occasions with time.ir" --body-file body.md
+          fi
+          gh workflow run test.yml --ref events-sync

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Holidays and occasions stay in step with time.ir: a weekly GitHub Action
+  fetches this Jalali year and the next again and opens a pull request when
+  anything changed, listing each changed day.
+
 ## 2.0.1 (2026-10-30)
 
 - Security: the month-scroll state no longer falls back to a world-writable

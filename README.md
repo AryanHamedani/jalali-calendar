@@ -135,8 +135,10 @@ so no formula reproduces the official calendar, and this one does not guess.
 It ships time.ir's official list for each year; a year without its file still
 shows every solar occasion and holiday and leaves the lunar ones out.
 
-The bundled years are 1404, 1405 and 1406. A new year arrives with an
-update, usually before Nowruz, or add one yourself (needs `curl` and `jq`):
+The bundled years are 1404, 1405 and 1406. Every week a GitHub Action fetches
+this year and the next from time.ir again, so a holiday moved by moon sighting,
+the newly approved calendar and each new year reach you when you rerun the
+installer. To add a year yourself (needs `curl` and `jq`):
 
 ```bash
 bin/fetch-events 1407
