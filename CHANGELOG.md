@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Omarchy, in Persian: the "On this day" header and years sit on the right,
+  where the text starts, instead of the year running into its title.
+- New screenshots, with the Hijri date and "On this day".
+
 ## 2.1.0 (2026-10-31)
 
 Occasions no longer need a file per year.

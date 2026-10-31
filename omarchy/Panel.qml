@@ -963,6 +963,8 @@ Panel {
               Text {
                 visible: root.historyLines > 0
                 textFormat: Text.PlainText
+                width: parent.width
+                horizontalAlignment: Text.AlignLeft
                 topPadding: Style.space(4)
                 text: root.label("onThisDay")
                 color: Qt.darker(root.contentForeground, 1.7)
@@ -986,6 +988,8 @@ Panel {
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
                     width: Style.space(40)
+                    // Set, not left to the digits, so it mirrors with the layout.
+                    horizontalAlignment: Text.AlignLeft
                     text: parent.entry && parent.entry.year !== null ? root.digits(parent.entry.year) : (parent.entry ? "·" : "")
                     color: Qt.darker(root.contentForeground, 1.7)
                     font.family: root.textFontFamily
