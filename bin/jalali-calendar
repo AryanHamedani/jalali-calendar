@@ -222,7 +222,7 @@ def waybar(opts, now=None):
             'class': classes, 'alt': 'holiday' if classes else 'workday'}
 
 
-SIGNAL = int(os.environ.get('JALALI_CALENDAR_SIGNAL', '9'))
+SIGNAL = int(os.environ.get('JALALI_CALENDAR_SIGNAL', '9')) if os.environ.get('JALALI_CALENDAR_SIGNAL', '9').isdigit() else 9
 
 
 def shift(value):
@@ -231,7 +231,7 @@ def shift(value):
     else:
         OFFSET.write_text(str(read_offset() + int(value)))
     # Redraw now rather than at the next tick; matches "signal" in the module.
-    subprocess.run(['pkill', '-RTMIN+%d' % SIGNAL, 'waybar'], check=False, capture_output=True)
+    subprocess.run(['pkill', '-x', '-RTMIN+%d' % SIGNAL, 'waybar'], check=False, capture_output=True)
 
 
 def parse_date(text):

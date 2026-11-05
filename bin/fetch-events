@@ -44,11 +44,29 @@ def get(jy, jm, jd):
         try:
             request = urllib.request.Request(API % (jy, jm + 1, jd), headers={'User-Agent': AGENT})
             with urllib.request.urlopen(request, timeout=30) as response:
-                return json.load(response)
+                body = response.read(1_000_001)
+            if len(body) > 1_000_000:
+                raise ValueError('oversized holidayapi.ir response')
+            return checked(json.loads(body))
         except (OSError, ValueError):
             if attempt == 4:
                 raise
             time.sleep(2 ** attempt)
+
+
+def checked(data):
+    """The response, if shaped as main() reads it; ValueError otherwise."""
+    if not (isinstance(data, dict) and isinstance(data.get('is_holiday'), bool)
+            and isinstance(data.get('events'), list)
+            and all(isinstance(e, dict) and isinstance(e.get('description'), str)
+                    and isinstance(e.get('additional_description', ''), str) for e in data['events'])):
+        raise ValueError('unexpected holidayapi.ir response')
+    return data
+
+
+def plain(text, limit=200):
+    """Fetched text for the pull request body: no Markdown, HTML or mentions."""
+    return re.sub(r'\s+', ' ', re.sub(r'[`<>\[\]()!@#*_|~\\]', '', text)).strip()[:limit]
 
 
 def fetch_year(jy):
@@ -149,7 +167,7 @@ def main(years):
                 title = re.sub(r'\s+', ' ', event['description']).strip()
                 if title == 'جمعه' or key(title) in skipped or any(same(title, t) for t in cell['occasions'] + history):
                     continue
-                report.append('- %s (%s): %s — `%s`' % (date, kind, title, event['additional_description'].strip()))
+                report.append('- %s (%s): %s — %s' % (date, kind, plain(title), plain(event.get('additional_description', ''))))
     (EVENTS / 'once.json').write_text(json.dumps(dict(sorted(once.items())), ensure_ascii=False, indent=1) + '\n')
 
     # The test fixture is time.ir's own holiday list; refresh the years fetched
@@ -164,7 +182,9 @@ def main(years):
         fixture.update(years=[min(first, *years), max(last, *years)], holidays=sorted(holidays))
         fixture_path.write_text(json.dumps(fixture, ensure_ascii=False, indent=0))
     if report:
-        print('\n'.join(report))
+        # GitHub caps a pull request body at 65,536 characters.
+        shown = report[:300]
+        print('\n'.join(shown + ['- … and %d more' % (len(report) - 300)] * (len(report) > 300)))
 
 
 if __name__ == '__main__':

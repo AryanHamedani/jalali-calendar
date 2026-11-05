@@ -1,6 +1,19 @@
 # Changelog
 
-## Unreleased
+## 2.1.1 (2026-11-05)
+
+- The sync pull request shows time.ir's text without Markdown, HTML or
+  mentions, and at most 300 lines; responses are capped at 1 MB and checked
+  for shape, so a malformed one changes no file.
+- Scrolling the date signals only Waybar itself (`pkill -x`), not other
+  programs whose names contain "waybar".
+- A non-numeric `JALALI_CALENDAR_SIGNAL` falls back to 9 instead of breaking
+  the label.
+- `--replace-clock` stops with an error if it cannot edit `shell.json`, and
+  keeps a symlinked `shell.json` a symlink.
+- The test workflow runs with a read-only token.
+- README: install from the Omarchy plugin marketplace. The Omarchy screenshot
+  is the root `preview.png`.
 
 - Omarchy, in Persian: the "On this day" header and years sit on the right,
   where the text starts, instead of the year running into its title.

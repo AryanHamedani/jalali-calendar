@@ -188,5 +188,25 @@ class Cli(unittest.TestCase):
                 self.assertFalse(self.cli.OFFSET.exists())
 
 
+
+class FetchEventsTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        import importlib.machinery
+        import importlib.util
+        loader = importlib.machinery.SourceFileLoader('fetch_events', str(ROOT / 'bin/fetch-events'))
+        cls.m = importlib.util.module_from_spec(importlib.util.spec_from_loader('fetch_events', loader))
+        loader.exec_module(cls.m)
+
+    def test_report_text_carries_no_markup(self):
+        self.assertEqual(self.m.plain('عید `x` [link](u) @user <img>\n!'), 'عید x linku user img')
+        self.assertEqual(len(self.m.plain('a' * 500)), 200)
+
+    def test_malformed_response_is_a_value_error(self):
+        for bad in (None, {}, {'is_holiday': 1, 'events': []}, {'is_holiday': True, 'events': [{'description': None}]}):
+            with self.assertRaises(ValueError, msg=bad):
+                self.m.checked(bad)
+        self.assertTrue(self.m.checked({'is_holiday': False, 'events': [{'description': 'a'}]}))
+
 if __name__ == '__main__':
     unittest.main()

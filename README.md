@@ -32,12 +32,19 @@ It is one calendar core with three ways to use it:
 | **Omarchy** | `omarchy/` shell widget | Takes the stock clock's place with a full popup calendar, year progress and occasions for the day under the pointer. |
 | **Terminal**, or any other bar | `jalali-calendar` | `today`, `date`, `convert`, a `cal`-style `month`, and the Waybar JSON for bars that read it. |
 
-![Omarchy: the popup calendar, in English and Persian](docs/omarchy.png)
+![Omarchy: the popup calendar, in English and Persian](preview.png)
 
 ## Install
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/AryanHamedani/jalali-calendar/main/install.sh | bash
+```
+
+On Omarchy you can instead add it from the
+[plugin marketplace](https://plugins.omarchy.org); it needs no setup:
+
+```bash
+omarchy plugin add https://github.com/AryanHamedani/jalali-calendar --enable
 ```
 
 Run the same command to update. On Omarchy it adds the shell widget (add

@@ -100,7 +100,9 @@ if [[ $front == omarchy ]]; then
       def swap: if .id == "omarchy.clock" then .id = $id else . end;
       .bar.layout |= with_entries(.value |= (map(select(.id != $id)) | map(swap)))
       | if .bar.centerAnchor == "omarchy.clock" then .bar.centerAnchor = $id else . end
-    ' "$shell_json" >"$shell_json.tmp" && mv "$shell_json.tmp" "$shell_json"
+    ' "$shell_json" >"$shell_json.tmp" || { rm -f "$shell_json.tmp"; die "could not edit $shell_json; it was left as it was"; }
+    # cat, not mv: a symlinked shell.json (dotfiles) stays a symlink.
+    cat "$shell_json.tmp" >"$shell_json" && rm -f "$shell_json.tmp"
   elif ! in_bar "$OMARCHY_ID"; then
     step "Placing it in the bar, after the clock"
     omarchy bar put "$OMARCHY_ID" --after omarchy.clock 2>/dev/null || omarchy bar put "$OMARCHY_ID" --section center
